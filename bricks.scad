@@ -24,30 +24,29 @@ for (i = [0 : 10]) {
     wallify(complex, i * (brickHeight + mortarThickness), i % 2, false);
 }
 
-//dispv(simple);
-//for (i = [0 : 20]) {
-//    wallify(simple, i * (brickHeight + mortarThickness), i % 2, false);
-//    wallify(secondWythe, i * (brickHeight + mortarThickness), i % 2, true);
-//}
+translate ([30, 0, 0]) {
+    dispv(simple);
+    for (i = [0 : 20]) {
+        wallify(simple, i * (brickHeight + mortarThickness), i % 2, false);
+        wallify(secondWythe, i * (brickHeight + mortarThickness), i % 2, true);
+    }
+}
+
+// holy crap OpenSCAD is bad at searching a 2D array
+//        searchItem = [v[i + 1].x, v[i + 1].y];
+//        result = search(searchItem, h0);
+//        convexPoint = result[0] != [] && result[1] != [];
+
+// TODO: figure out how to do this
+// inside = point_in_polygon(v[i], h0, nonzero=false, eps=EPSILON);
 
 module wallify (v, h, isCourseEven, insideOut) {
-    length = len(v);
+    length = len(v) - 1;
     for (i = [0 : length]) {
-        // holy crap OpenSCAD is bad at searching a 2D array
-        searchItem = [v[i + 1].x, v[i + 1].y];
-        result = search(searchItem, h0);
-        convexPoint = result[0] != [] && result[1] != [];
-
-        if (i < length - 1) {
-            start = concat(v[i], [h]);
-            end = concat(v[i + 1], [h]);
-
-            // TODO: figure out how to do this
-            // inside = point_in_polygon(v[i], h0, nonzero=false, eps=EPSILON);
-
-            course(start, end, isCourseEven, i % 2, insideOut);
+        if (i < length) {
+            course(concat(v[i], [h]), concat(v[i + 1], [h]), isCourseEven, i % 2, insideOut);
         } else {
-            course(concat(v[length - 1], [h]), concat(v[0], [h]), isCourseEven, true, insideOut);
+            course(concat(v[length], [h]), concat(v[0], [h]), isCourseEven, i % 2, insideOut);
         }
     }
 }
