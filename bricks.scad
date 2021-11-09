@@ -11,12 +11,6 @@ simple = [[0, 0], [w, 0], [w, d], [0, d]];
 complex = [[0, 0], [w, 0], [w, d], [0, d],
           [0, 8.5 * bm], [8.5 * bm, 8.5 * bm], [8.5 * bm, 4.95 * bm], [0, 4.95 * bm],
           [0, 3.5 * bm], [8.5 * bm, 3.5 * bm], [8.5 * bm, 1.45 * bm], [0, 1.45 * bm]];
-
-// TODO: figure out how to generate convex hull from points such as `simple` directly
-// maybe try `https://github.com/openscad/scad-utils/blob/master/hull.scad`?
-// `h0 = convexhull2d(simple);`
-h0 = [[0, 0], [w, 0], [w, d], [0, d]];
-
 secondWythe = [[-0.1, -0.1], [-0.1, d + 0.1], [w + 0.1, d + 0.1], [w + 0.1, -0.1]];
 
 dispv(complex);
@@ -31,14 +25,6 @@ translate ([30, 0, 0]) {
         wallify(secondWythe, i * (brickHeight + mortarThickness), i % 2, true);
     }
 }
-
-// holy crap OpenSCAD is bad at searching a 2D array
-//        searchItem = [v[i + 1].x, v[i + 1].y];
-//        result = search(searchItem, h0);
-//        convexPoint = result[0] != [] && result[1] != [];
-
-// TODO: figure out how to do this
-// inside = point_in_polygon(v[i], h0, nonzero=false, eps=EPSILON);
 
 module wallify (v, h, isCourseEven, insideOut) {
     length = len(v) - 1;
@@ -73,24 +59,24 @@ module course(p1, p2, isCourseEven, isWallEven, insideOut) {
                     : 0;
 
                 if (isCourseEven) {
-                    runningBondEx(length - offset, offset - adjWallOffset);
+                    runningBond(length - offset, offset - adjWallOffset);
                 } else {
-                    runningBondEx(length - offset - adjWallOffset, offset + adjWallOffset);
+                    runningBond(length - offset - adjWallOffset, offset + adjWallOffset);
                 }
             } else {
                 halfStepLength = (brickLength - mortarThickness) / 2;
 
                 if (isCourseEven) {
-                    runningBondEx(length - mortarThickness, !isWallEven ? - halfStepLength : mortarThickness);
+                    runningBond(length - mortarThickness, !isWallEven ? - halfStepLength : mortarThickness);
                 } else {
-                    runningBondEx(length - mortarThickness, isWallEven ? - halfStepLength : mortarThickness);
+                    runningBond(length - mortarThickness, isWallEven ? - halfStepLength : mortarThickness);
                 }
             }
         }
     }
 }
 
-module runningBondEx(length, offset) {
+module runningBond(length, offset) {
     delta = brickLength + mortarThickness;
     start = offset;
 
@@ -101,18 +87,13 @@ module runningBondEx(length, offset) {
     }
 }
 
-function angle (a1, a2, b1, b2) =
-    let (dAx = a2.x - a1.x)
-    let (dAy = a2.y - a1.y)
-    let (dBx = b2.x - b1.x)
-    let (dBy = b2.y - b1.y)
-    atan2(dAx * dBy - dAy * dBx, dAx * dBx + dAy * dBy);
-
 module dispv (v) {
     indi = [[for (i = [0: len(v) - 1]) i]];
 
-    color("gray", 1.0) { translate([0, 0, -0.5]) {
-        // hull()
-        polygon(points = v, paths = indi);
-    } }
+    color("gray", 1.0) {
+        translate([0, 0, -0.5]) {
+            // hull()
+            polygon(points = v, paths = indi);
+        }
+    }
 }
