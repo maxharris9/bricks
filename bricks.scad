@@ -4,8 +4,8 @@ mortarThickness = 1 / 10;
 brickLength = (2 * brickWidth) + mortarThickness;
 bm = brickLength + mortarThickness;
 
-w = (5 * bm) - mortarThickness;
-d = (5 * bm) - mortarThickness;
+w = (10 * bm) - mortarThickness;
+d = (10 * bm) - mortarThickness;
 
 simple = [[0, 0], [w, 0], [w, d], [0, d]];
 complex = [[0, 0], [w, 0], [w, d], [0, d],
@@ -15,20 +15,20 @@ complex = [[0, 0], [w, 0], [w, d], [0, d],
 // TODO: figure out how to generate convex hull from points such as `simple` directly
 // maybe try `https://github.com/openscad/scad-utils/blob/master/hull.scad`?
 // `h0 = convexhull2d(simple);`
-
 h0 = [[0, 0], [w, 0], [w, d], [0, d]];
-v1 = [[-0.1, -0.1], [-0.1, d + 0.1], [w + 0.1, d + 0.1], [w + 0.1, -0.1]];
 
-main(simple);
+secondWythe = [[-0.1, -0.1], [-0.1, d + 0.1], [w + 0.1, d + 0.1], [w + 0.1, -0.1]];
 
-module main (geometry) {
-    dispv(geometry);
-
-    for (i = [0 : 10]) {
-        wallify(geometry, i * (brickHeight + mortarThickness), i % 2, false);
-        wallify(v1, i * (brickHeight + mortarThickness), i % 2, true);
-    }
+dispv(complex);
+for (i = [0 : 10]) {
+    wallify(complex, i * (brickHeight + mortarThickness), i % 2, false);
 }
+
+//dispv(simple);
+//for (i = [0 : 20]) {
+//    wallify(simple, i * (brickHeight + mortarThickness), i % 2, false);
+//    wallify(secondWythe, i * (brickHeight + mortarThickness), i % 2, true);
+//}
 
 module wallify (v, h, isCourseEven, insideOut) {
     length = len(v);
