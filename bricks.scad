@@ -7,49 +7,33 @@ bm = brickLength + mortarThickness;
 w = (5 * bm) - mortarThickness;
 d = (5 * bm) - mortarThickness;
 
-v0 = [
-         [0, 0], [w, 0], [w, d], [0, d],
-//         [0, 8.5 * bm], [8.5 * bm, 8.5 * bm], [8.5 * bm, 4.95 * bm], [0, 4.95 * bm],
-//         [0, 3.5 * bm], [8.5 * bm, 3.5 * bm], [8.5 * bm, 1.45 * bm], [0, 1.45 * bm]
-     ];
-h0 = [ // TODO: figure out how to generate convex hull from points such as v0 directly
-         [0, 0], [w, 0], [w, d], [0, d]
-     ];
-v1 = [
-[-0.1, d + 0.1],[w + 0.1, d + 0.1],[w + 0.1, -0.1], [-0.1, -0.1]];
+v0 = [[0, 0], [w, 0], [w, d], [0, d],
+    /*[0, 8.5 * bm], [8.5 * bm, 8.5 * bm], [8.5 * bm, 4.95 * bm], [0, 4.95 * bm],
+      [0, 3.5 * bm], [8.5 * bm, 3.5 * bm], [8.5 * bm, 1.45 * bm], [0, 1.45 * bm]*/];
 
-// TODO: try https://github.com/openscad/scad-utils/blob/master/hull.scad
-//h0 = convexhull2d(v0);
+// TODO: figure out how to generate convex hull from points such as v0 directly
+// maybe try https://github.com/openscad/scad-utils/blob/master/hull.scad
+// h0 = convexhull2d(v0);
+h0 = [[0, 0], [w, 0], [w, d], [0, d]];
+v1 = [[-0.1, d + 0.1], [w + 0.1, d + 0.1], [w + 0.1, -0.1], [-0.1, -0.1]];
 
-dispv(v0);
+main();
 
-for (i = [0 : 10]) {
-    wallify(v0, i * (brickHeight + mortarThickness), i % 2, false);
-}
+module main () {
+    dispv(v0);
 
-translate([0, 10.9, 0]) {
-    rotate([0, 0, -90]) {
-        for (i = [0 : 10]) {
-            wallify(v1, i * (brickHeight + mortarThickness), i % 2, true);
-        }
-        dispv(v0);
+    for (i = [0 : 10]) {
+        wallify(v0, i * (brickHeight + mortarThickness), i % 2, false);
     }
-}
 
-function angle (a1, a2, b1, b2) =
-    let (dAx = a2.x - a1.x)
-    let (dAy = a2.y - a1.y)
-    let (dBx = b2.x - b1.x)
-    let (dBy = b2.y - b1.y)
-    atan2(dAx * dBy - dAy * dBx, dAx * dBx + dAy * dBy);
-
-module dispv (v) {
-    indi = [[for (i = [0: len(v) - 1]) i]];
-
-    color("gray", 1.0) { translate([0, 0, -0.5]) {
-        // hull() 
-        polygon(points = v, paths = indi);
-    } }
+    translate([0, 10.9, 0]) {
+        rotate([0, 0, -90]) {
+            for (i = [0 : 10]) {
+                wallify(v1, i * (brickHeight + mortarThickness), i % 2, true);
+            }
+            dispv(v0);
+        }
+    }
 }
 
 module wallify (v, h, isCourseEven, insideOut) {
@@ -85,22 +69,19 @@ module course(p1, p2, isCourseEven, isWallEven, insideOut) {
     translate(p1) {
         rotate([0, b, c]) {
             if (!insideOut) {
-                offsetLength = ((brickLength - mortarThickness) / 2);
                 halfStepLength = (brickLength + mortarThickness) / 2;
                 adjWallOffset = isWallEven
                     ? halfStepLength
                     : 0;
-    
+
                 offset = isCourseEven
-                    ? ((brickLength - mortarThickness) / 2)
+                    ? ((brickLength - mortarThickness) / 2) + mortarThickness
                     : 0;
-                
-                offset2 = offset > 0 ? offset + mortarThickness : offset;
-    
+
                 if (isWallEven && !isCourseEven) {
-                    runningBondEx(length - offset2 - adjWallOffset, adjWallOffset + offset2);
+                    runningBondEx(length - offset - adjWallOffset, adjWallOffset + offset);
                 } else {
-                    runningBondEx(length - offset2, offset2 - adjWallOffset);
+                    runningBondEx(length - offset, offset - adjWallOffset);
                 }
             } else {
                 halfStepLength = (brickLength - mortarThickness) / 2;
@@ -124,4 +105,20 @@ module runningBondEx(length, offset) {
             color("#8b4f39", 1.0) { cube([brickHeight, brickWidth, brickLength]); }
         }
     }
+}
+
+function angle (a1, a2, b1, b2) =
+    let (dAx = a2.x - a1.x)
+    let (dAy = a2.y - a1.y)
+    let (dBx = b2.x - b1.x)
+    let (dBy = b2.y - b1.y)
+    atan2(dAx * dBy - dAy * dBx, dAx * dBx + dAy * dBy);
+
+module dispv (v) {
+    indi = [[for (i = [0: len(v) - 1]) i]];
+
+    color("gray", 1.0) { translate([0, 0, -0.5]) {
+        // hull()
+        polygon(points = v, paths = indi);
+    } }
 }
