@@ -7,32 +7,26 @@ bm = brickLength + mortarThickness;
 w = (5 * bm) - mortarThickness;
 d = (5 * bm) - mortarThickness;
 
-v0 = [[0, 0], [w, 0], [w, d], [0, d],
-    /*[0, 8.5 * bm], [8.5 * bm, 8.5 * bm], [8.5 * bm, 4.95 * bm], [0, 4.95 * bm],
-      [0, 3.5 * bm], [8.5 * bm, 3.5 * bm], [8.5 * bm, 1.45 * bm], [0, 1.45 * bm]*/];
+simple = [[0, 0], [w, 0], [w, d], [0, d]];
+complex = [[0, 0], [w, 0], [w, d], [0, d],
+          [0, 8.5 * bm], [8.5 * bm, 8.5 * bm], [8.5 * bm, 4.95 * bm], [0, 4.95 * bm],
+          [0, 3.5 * bm], [8.5 * bm, 3.5 * bm], [8.5 * bm, 1.45 * bm], [0, 1.45 * bm]];
 
-// TODO: figure out how to generate convex hull from points such as v0 directly
-// maybe try https://github.com/openscad/scad-utils/blob/master/hull.scad
-// h0 = convexhull2d(v0);
+// TODO: figure out how to generate convex hull from points such as `simple` directly
+// maybe try `https://github.com/openscad/scad-utils/blob/master/hull.scad`?
+// `h0 = convexhull2d(simple);`
+
 h0 = [[0, 0], [w, 0], [w, d], [0, d]];
-v1 = [[-0.1, d + 0.1], [w + 0.1, d + 0.1], [w + 0.1, -0.1], [-0.1, -0.1]];
+v1 = [[-0.1, -0.1], [-0.1, d + 0.1], [w + 0.1, d + 0.1], [w + 0.1, -0.1]];
 
-main();
+main(simple);
 
-module main () {
-    dispv(v0);
+module main (geometry) {
+    dispv(geometry);
 
     for (i = [0 : 10]) {
-        wallify(v0, i * (brickHeight + mortarThickness), i % 2, false);
-    }
-
-    translate([0, 10.9, 0]) {
-        rotate([0, 0, -90]) {
-            for (i = [0 : 10]) {
-                wallify(v1, i * (brickHeight + mortarThickness), i % 2, true);
-            }
-            dispv(v0);
-        }
+        wallify(geometry, i * (brickHeight + mortarThickness), i % 2, false);
+        wallify(v1, i * (brickHeight + mortarThickness), i % 2, true);
     }
 }
 
@@ -47,6 +41,7 @@ module wallify (v, h, isCourseEven, insideOut) {
         if (i < length - 1) {
             start = concat(v[i], [h]);
             end = concat(v[i + 1], [h]);
+
             // TODO: figure out how to do this
             // inside = point_in_polygon(v[i], h0, nonzero=false, eps=EPSILON);
 
@@ -58,10 +53,10 @@ module wallify (v, h, isCourseEven, insideOut) {
 }
 
 module course(p1, p2, isCourseEven, isWallEven, insideOut) {
+    // translate line to angles. why is this function not built-in to OpenSCAD?
     Xdist = p2[0] - p1[0];
     Ydist = p2[1] - p1[1];
     Zdist = p2[2] - p1[2];
-
     length = norm([Xdist, Ydist, Zdist]); // radial distance
     b = acos(Zdist / length); // inclination angle
     c = atan2(Ydist, Xdist); // azimuthal angle
@@ -78,10 +73,10 @@ module course(p1, p2, isCourseEven, isWallEven, insideOut) {
                     ? ((brickLength - mortarThickness) / 2) + mortarThickness
                     : 0;
 
-                if (isWallEven && !isCourseEven) {
-                    runningBondEx(length - offset - adjWallOffset, adjWallOffset + offset);
-                } else {
+                if (isCourseEven) {
                     runningBondEx(length - offset, offset - adjWallOffset);
+                } else {
+                    runningBondEx(length - offset - adjWallOffset, offset + adjWallOffset);
                 }
             } else {
                 halfStepLength = (brickLength - mortarThickness) / 2;
