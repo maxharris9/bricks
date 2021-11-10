@@ -20,7 +20,7 @@ for (i = [0 : 10]) {
 
 translate ([30, 0, 0]) {
     dispv(simple);
-    for (i = [0 : 20]) {
+    for (i = [0 : 10]) {
         wallify(simple, i * (brickHeight + mortarThickness), i % 2, false);
         wallify(secondWythe, i * (brickHeight + mortarThickness), i % 2, true);
     }
@@ -30,9 +30,19 @@ module wallify (v, h, isCourseEven, insideOut) {
     length = len(v) - 1;
     for (i = [0 : length]) {
         if (i < length) {
-            course(concat(v[i], [h]), concat(v[i + 1], [h]), isCourseEven, i % 2, insideOut);
+            course(
+                concat(v[i], [h]), concat(v[i + 1], [h]),
+                isCourseEven,
+                i % 2 || (i == 4 || i == 6 || i == 8), // i >= 4 && i <= 8 also works
+                insideOut || (i == 5 || i == 6 || i == 9 || i == 10)
+            );
         } else {
-            course(concat(v[length], [h]), concat(v[0], [h]), isCourseEven, i % 2, insideOut);
+            course(
+                concat(v[length], [h]), concat(v[0], [h]),
+                i == 11 ? !isCourseEven: isCourseEven,
+                i % 2,
+                insideOut
+            );
         }
     }
 }
@@ -48,35 +58,36 @@ module course(p1, p2, isCourseEven, isWallEven, insideOut) {
 
     translate(p1) {
         rotate([0, b, c]) {
-            if (!insideOut) {
-                halfStepLength = (brickLength + mortarThickness) / 2;
-                adjWallOffset = isWallEven
-                    ? halfStepLength
-                    : 0;
-
-                offset = isCourseEven
-                    ? ((brickLength - mortarThickness) / 2) + mortarThickness
-                    : 0;
-
+            if (insideOut) {
                 if (isCourseEven) {
-                    runningBond(length - offset, offset - adjWallOffset);
+                    layBricks(
+                        length - mortarThickness - brickWidth,
+                        !isWallEven ? - brickWidth : mortarThickness
+                    );
                 } else {
-                    runningBond(length - offset - adjWallOffset, offset + adjWallOffset);
+                    layBricks(
+                        length - mortarThickness - brickWidth,
+                        isWallEven ? - brickWidth : mortarThickness
+                    );
                 }
             } else {
-                halfStepLength = (brickLength - mortarThickness) / 2;
-
                 if (isCourseEven) {
-                    runningBond(length - mortarThickness, !isWallEven ? - halfStepLength : mortarThickness);
+                    layBricks(
+                        length - brickWidth - mortarThickness,
+                        !isWallEven ? brickWidth + mortarThickness : 0
+                    );
                 } else {
-                    runningBond(length - mortarThickness, isWallEven ? - halfStepLength : mortarThickness);
+                    layBricks(
+                        length - (isWallEven ? brickWidth + mortarThickness : 0),
+                        isWallEven ? brickWidth + mortarThickness : 0
+                    );
                 }
             }
         }
     }
 }
 
-module runningBond(length, offset) {
+module layBricks(length, offset) {
     delta = brickLength + mortarThickness;
     start = offset;
 
