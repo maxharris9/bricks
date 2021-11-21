@@ -1,9 +1,11 @@
 const jscad = require('@jscad/modeling')
 const { polygon } = jscad.primitives
-const { line } = jscad.primitives
-const { translate } = jscad.transforms
+const { line, cuboid } = jscad.primitives
+const { translate, rotate } = jscad.transforms
 const { colorize, colorNameToRgb } = jscad.colors
 const { offset } = jscad.expansions // TODO: replace this with something homegrown
+const { extrudeLinear } = jscad.extrusions
+const { subtract } = require('@jscad/modeling').booleans
 
 function traceBounds (prev, curr, next, finl, winding) {
   const p = line([prev, curr])
@@ -26,26 +28,63 @@ function traceBounds (prev, curr, next, finl, winding) {
             intersect(p.points.flat(), c.points.flat(), false)
           ]
         : [
-            intersect(cp.points.flat(), n.points.flat(), false),
-            intersect(n.points.flat(), c.points.flat(), false),
+            intersect(pp.points.flat(), cp.points.flat(), false),
             intersect(c.points.flat(), pp.points.flat(), false),
-            intersect(pp.points.flat(), cp.points.flat(), false)
+            intersect(n.points.flat(), c.points.flat(), false),
+            intersect(cp.points.flat(), n.points.flat(), false)
           ]
     })
   )
+}
+
+function length (x, y, z) {
+  let len = x * x + y * y + z * z
+
+  if (len > 0) {
+    len = 1 / Math.sqrt(len)
+  }
+
+  return len
 }
 
 function iterateEdges (points, winding, edgeInfo) {
   const shapes = []
   const len = points.length
   for (let i = 0; i < len - 1; i++) {
-    // const brickLimit = edgeInfo[i].l
+    const brickLimit = 15 // edgeInfo[i].l
     const prev = (i === 0) ? points[len - 1] : points[i - 1]
     const curr = (i === 0) ? points[0] : points[i]
     const next = (i === 0) ? points[1] : points[i + 1]
     const finl = (i === 0) ? points[2] : (i <= len - 3 ? points[i + 2] : points[0])
-    shapes.push(traceBounds(prev, curr, next, finl, winding))
+
+    // const edgeLength = length(next[0] - curr[0], next[1] - curr[1], 0)
+
+    const blockOutline = traceBounds(prev, curr, next, finl, winding)
+    const block = extrudeLinear({ height: 0.95 }, blockOutline)
+
+    // now lay mortar and subtract it from the block
+    const mortar = []
+    for (let j = 0; j < brickLimit; j++) {
+      const c = winding ? curr.concat(0) : next.concat(0)
+      const n = winding ? next.concat(0) : curr.concat(0)
+      mortar.push(
+        layOnLine(c, n,
+          translate(
+            [1, 2, -j * (brickLength + mortarThickness)],
+            brick(4, 4, 0.1) // height, depth, width
+          )
+        )
+      )
+    }
+
+    let scratchBlock = block
+    for (let k = 0; k < mortar.length; k++) {
+      scratchBlock = subtract(scratchBlock, mortar[k])
+    }
+
+    shapes.push(scratchBlock)
   }
+
   return shapes
 }
 
@@ -65,6 +104,32 @@ function intersect ([x1, y1, x2, y2], [x3, y3, x4, y4], enforceSegments) {
   if (enforceSegments && (ua < 0 || ua > 1 || ub < 0 || ub > 1)) { return false }
 
   return [x1 + ua * (x2 - x1), y1 + ua * (y2 - y1)]
+}
+
+// const brickHeight = 0.75
+const brickWidth = 1
+const mortarThickness = 1 / 10
+const brickLength = (2 * brickWidth) + mortarThickness
+
+// function measureLine (p2, p1) {
+//   const deltaX = p2[0] - p1[0]
+//   const deltaY = p2[1] - p1[1]
+//   const deltaZ = p2[2] - p1[2]
+//   return Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ)
+// }
+
+function layOnLine (p2, p1, geometry) {
+  const deltaX = p2[0] - p1[0]
+  const deltaY = p2[1] - p1[1]
+  const deltaZ = p2[2] - p1[2]
+  const radialDistance = length(deltaX, deltaY, deltaZ)
+  const inclinationAngle = Math.acos(deltaZ / radialDistance)
+  const azimuthalAngle = Math.atan2(deltaY, deltaX)
+  return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
+}
+
+function brick (brickLength, brickWidth, brickHeight) {
+  return cuboid({ size: [brickLength, brickWidth, brickHeight], center: [-brickLength / 2, -brickWidth / 2, -brickHeight / 2] })
 }
 
 function main () {
@@ -87,7 +152,7 @@ function main () {
     shapes.push(translate([25, 0, i], iterateEdges(complex2, i % 2)))
   }
 
-  return shapes // translate([0, 0, 0], shapes)
+  return translate([-10, 0, -10], shapes)
 }
 
 module.exports = { main }
