@@ -38,26 +38,20 @@ function traceBounds (prev, curr, next, finl, winding) {
 }
 
 function length (x, y, z) {
-  let len = x * x + y * y + z * z
-
-  if (len > 0) {
-    len = 1 / Math.sqrt(len)
-  }
-
-  return len
+  return Math.sqrt(x * x + y * y + z * z)
 }
 
-function iterateEdges (points, winding, edgeInfo) {
+function iterateEdges (points, winding, showMortarSlices = false) {
   const shapes = []
   const len = points.length
   for (let i = 0; i < len - 1; i++) {
-    const brickLimit = 15 // edgeInfo[i].l
     const prev = (i === 0) ? points[len - 1] : points[i - 1]
     const curr = (i === 0) ? points[0] : points[i]
     const next = (i === 0) ? points[1] : points[i + 1]
     const finl = (i === 0) ? points[2] : (i <= len - 3 ? points[i + 2] : points[0])
 
-    // const edgeLength = length(next[0] - curr[0], next[1] - curr[1], 0)
+    const edgeLength = length(next[0] - curr[0], next[1] - curr[1], 0)
+    const brickLimit = edgeLength / (brickLength + mortarThickness)
 
     const blockOutline = traceBounds(prev, curr, next, finl, winding)
     const block = extrudeLinear({ height: brickHeight }, blockOutline)
@@ -65,14 +59,18 @@ function iterateEdges (points, winding, edgeInfo) {
     // now lay mortar and subtract it from the block
     const mortar = []
     for (let j = 0; j < brickLimit; j++) {
-      mortar.push(
-        layOnLine(curr.concat(0), next.concat(0),
-          translate(
-            [1, 2, (-j * (brickLength + mortarThickness)) - (winding ? brickWidth : 0)],
-            brick(4, 4, 0.1) // height, depth, width
-          )
+      const mortarSlice = layOnLine(curr.concat(0), next.concat(0),
+        translate(
+          [1, 1, (-j * (brickLength + mortarThickness)) - (winding ? brickWidth + mortarThickness : 0)],
+          brick(3, 3, mortarThickness) // height, depth, width
         )
       )
+
+      if (showMortarSlices) {
+        shapes.push(mortarSlice)
+      } else {
+        mortar.push(mortarSlice)
+      }
     }
 
     let scratchBlock = block
@@ -109,19 +107,12 @@ const brickWidth = 1
 const mortarThickness = 1 / 10
 const brickLength = (2 * brickWidth) + mortarThickness
 
-// function measureLine (p2, p1) {
-//   const deltaX = p2[0] - p1[0]
-//   const deltaY = p2[1] - p1[1]
-//   const deltaZ = p2[2] - p1[2]
-//   return Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ)
-// }
-
 function layOnLine (p2, p1, geometry) {
   const deltaX = p2[0] - p1[0]
   const deltaY = p2[1] - p1[1]
   const deltaZ = p2[2] - p1[2]
   const radialDistance = length(deltaX, deltaY, deltaZ)
-  const inclinationAngle = Math.acos(deltaZ / radialDistance)
+  const inclinationAngle = Math.acos(deltaZ * radialDistance)
   const azimuthalAngle = Math.atan2(deltaY, deltaX)
   return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
 }
@@ -139,19 +130,19 @@ function main () {
   const pentagon = [[0, 0], [0, 6], [6, 10], [12, 6], [12, 0]]
   const complex = [[0, 0], [7.2, 0], [14.2, 9.9], [18, 9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
   const complex2 = [[0, 0], [7.2, 0], [14.2, -9.9], [18, -9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
-  // const edgeInfo = [{ l: 6 }, { l: 5 }, { l: 3 }, { l: 4 }, { l: 4 }, { l: 6 }, { l: 13 }, { l: 6 }, { l: 5 }]
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 2; i++) {
+    const winding = i % 2
     const h = i * (brickHeight + mortarThickness)
-    shapes.push(translate([-60, 0, h], iterateEdges(triangle, i % 2)))
-    shapes.push(translate([-45, 0, h], iterateEdges(box, i % 2)))
-    shapes.push(translate([-45, 20, h], iterateEdges(backwards, i % 2)))
-    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, i % 2)))
-    shapes.push(translate([-10, 0, h], iterateEdges(complex, i % 2)))
-    shapes.push(translate([25, 0, h], iterateEdges(complex2, i % 2)))
+    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding)))
+    shapes.push(translate([-45, 0, h], iterateEdges(box, winding)))
+    shapes.push(translate([-45, 20, h], iterateEdges(backwards, winding)))
+    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding)))
+    shapes.push(translate([-10, 0, h], iterateEdges(complex, winding)))
+    shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, true)))
   }
 
-  return translate([-10, 0, -10], shapes)
+  return translate([-10, 0, 0], shapes)
 }
 
 module.exports = { main }
