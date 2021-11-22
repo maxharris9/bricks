@@ -65,12 +65,10 @@ function iterateEdges (points, winding, edgeInfo) {
     // now lay mortar and subtract it from the block
     const mortar = []
     for (let j = 0; j < brickLimit; j++) {
-      const c = winding ? curr.concat(0) : next.concat(0)
-      const n = winding ? next.concat(0) : curr.concat(0)
       mortar.push(
-        layOnLine(c, n,
+        layOnLine(curr.concat(0), next.concat(0),
           translate(
-            [1, 2, -j * (brickLength + mortarThickness)],
+            [1, 2, (-j * (brickLength + mortarThickness)) - (winding ? brickWidth : 0)],
             brick(4, 4, 0.1) // height, depth, width
           )
         )
