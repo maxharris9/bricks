@@ -54,7 +54,10 @@ function iterateEdges (points, winding, showMortarSlices = false) {
     const brickLimit = edgeLength / (brickLength + mortarThickness)
 
     const blockOutline = traceBounds(prev, curr, next, finl, winding)
-    const block = extrudeLinear({ height: brickHeight }, blockOutline)
+
+    const color = i % 2 ? colorNameToRgb('orange') : colorNameToRgb('green')
+
+    const block = colorize(color, extrudeLinear({ height: brickHeight }, blockOutline))
 
     // now lay mortar and subtract it from the block
     const mortar = []
@@ -67,9 +70,9 @@ function iterateEdges (points, winding, showMortarSlices = false) {
       )
 
       if (showMortarSlices) {
-        shapes.push(mortarSlice)
+        shapes.push(colorize(colorNameToRgb('gray'), mortarSlice))
       } else {
-        mortar.push(mortarSlice)
+        mortar.push(colorize(colorNameToRgb('gray'), mortarSlice))
       }
     }
 
@@ -131,7 +134,7 @@ function main () {
   const complex = [[0, 0], [7.2, 0], [14.2, 9.9], [18, 9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
   const complex2 = [[0, 0], [7.2, 0], [14.2, -9.9], [18, -9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
 
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 1; i++) {
     const winding = i % 2
     const h = i * (brickHeight + mortarThickness)
     shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding)))
