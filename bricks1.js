@@ -60,7 +60,7 @@ function iterateEdges (points, winding, edgeInfo) {
     // const edgeLength = length(next[0] - curr[0], next[1] - curr[1], 0)
 
     const blockOutline = traceBounds(prev, curr, next, finl, winding)
-    const block = extrudeLinear({ height: 0.95 }, blockOutline)
+    const block = extrudeLinear({ height: brickHeight }, blockOutline)
 
     // now lay mortar and subtract it from the block
     const mortar = []
@@ -104,7 +104,7 @@ function intersect ([x1, y1, x2, y2], [x3, y3, x4, y4], enforceSegments) {
   return [x1 + ua * (x2 - x1), y1 + ua * (y2 - y1)]
 }
 
-// const brickHeight = 0.75
+const brickHeight = 0.75
 const brickWidth = 1
 const mortarThickness = 1 / 10
 const brickLength = (2 * brickWidth) + mortarThickness
@@ -142,12 +142,13 @@ function main () {
   // const edgeInfo = [{ l: 6 }, { l: 5 }, { l: 3 }, { l: 4 }, { l: 4 }, { l: 6 }, { l: 13 }, { l: 6 }, { l: 5 }]
 
   for (let i = 0; i < 10; i++) {
-    shapes.push(translate([-60, 0, i], iterateEdges(triangle, i % 2)))
-    shapes.push(translate([-45, 0, i], iterateEdges(box, i % 2)))
-    shapes.push(translate([-45, 20, i], iterateEdges(backwards, i % 2)))
-    shapes.push(translate([-30, 0, i], iterateEdges(pentagon, i % 2)))
-    shapes.push(translate([-10, 0, i], iterateEdges(complex, i % 2)))
-    shapes.push(translate([25, 0, i], iterateEdges(complex2, i % 2)))
+    const h = i * (brickHeight + mortarThickness)
+    shapes.push(translate([-60, 0, h], iterateEdges(triangle, i % 2)))
+    shapes.push(translate([-45, 0, h], iterateEdges(box, i % 2)))
+    shapes.push(translate([-45, 20, h], iterateEdges(backwards, i % 2)))
+    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, i % 2)))
+    shapes.push(translate([-10, 0, h], iterateEdges(complex, i % 2)))
+    shapes.push(translate([25, 0, h], iterateEdges(complex2, i % 2)))
   }
 
   return translate([-10, 0, -10], shapes)
