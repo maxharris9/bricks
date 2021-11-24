@@ -1,40 +1,41 @@
 const jscad = require('@jscad/modeling')
-const { polygon } = jscad.primitives
-const { line, cuboid } = jscad.primitives
+const { polygon, line, cuboid } = jscad.primitives
 const { translate, rotate } = jscad.transforms
 const { colorize, colorNameToRgb } = jscad.colors
 const { offset } = jscad.expansions // TODO: replace this with something homegrown
 const { extrudeLinear } = jscad.extrusions
-const { subtract } = require('@jscad/modeling').booleans
+const { subtract } = jscad.booleans
+const { hull } = jscad.hulls
 
-function traceBounds (prev, curr, next, finl, winding) {
+function traceBounds (prev, curr, next, finl, winding, isNonHullPoint) {
   const p = line([prev, curr])
   const c = line([curr, next])
   const n = line([next, finl])
 
   const offsetOptions = { delta: -1.0, corners: 'edge' }
-  const pp = colorize(colorNameToRgb('goldenrod'), offset(offsetOptions, p))
+  // const pp = colorize(colorNameToRgb('goldenrod'), offset(offsetOptions, p))
   const cp = colorize(colorNameToRgb('orange'), offset(offsetOptions, c))
   const np = colorize(colorNameToRgb('red'), offset(offsetOptions, n))
 
-  return colorize(
-    colorNameToRgb('green'),
-    polygon({
-      points: winding
-        ? [
-            intersect(c.points.flat(), np.points.flat(), false),
-            intersect(np.points.flat(), cp.points.flat(), false),
-            intersect(cp.points.flat(), p.points.flat(), false),
-            intersect(p.points.flat(), c.points.flat(), false)
-          ]
-        : [
-            intersect(pp.points.flat(), cp.points.flat(), false),
-            intersect(c.points.flat(), pp.points.flat(), false),
-            intersect(n.points.flat(), c.points.flat(), false),
-            intersect(cp.points.flat(), n.points.flat(), false)
-          ]
-    })
-  )
+  const ppp = colorize(colorNameToRgb('red'), offset(Object.assign({}, offsetOptions, { delta: isNonHullPoint ? -1.0 : -1.1 }), p))
+  // const cpp = colorize(colorNameToRgb('red'), offset(Object.assign({}, offsetOptions, { delta: -1.1 }), c))
+  // const npp = colorize(colorNameToRgb('red'), offset(Object.assign({}, offsetOptions, { delta: -1.1 }), n))
+
+  return polygon({
+    points: winding
+      ? [
+          intersect(c.points.flat(), np.points.flat(), false),
+          intersect(np.points.flat(), cp.points.flat(), false),
+          intersect(cp.points.flat(), p.points.flat(), false),
+          intersect(p.points.flat(), c.points.flat(), false)
+        ]
+      : [
+          intersect(ppp.points.flat(), cp.points.flat(), false),
+          intersect(c.points.flat(), ppp.points.flat(), false),
+          intersect(n.points.flat(), c.points.flat(), false),
+          intersect(cp.points.flat(), n.points.flat(), false)
+        ]
+  })
 }
 
 function length (x, y, z) {
@@ -44,6 +45,17 @@ function length (x, y, z) {
 function iterateEdges (points, winding, showMortarSlices = false) {
   const shapes = []
   const len = points.length
+
+  const convexPoints = hull(polygon({ points: points })).sides.map(item => item[0])
+
+  const nonHullPoints = []
+  for (let index = 0; index < points.length; index++) {
+    const point = points[index]
+    if (!convexPoints.find(cp => cp[0] === point[0] && cp[1] === point[1])) {
+      nonHullPoints.push(index)
+    }
+  }
+
   for (let i = 0; i < len - 1; i++) {
     const prev = (i === 0) ? points[len - 1] : points[i - 1]
     const curr = (i === 0) ? points[0] : points[i]
@@ -53,7 +65,7 @@ function iterateEdges (points, winding, showMortarSlices = false) {
     const edgeLength = length(next[0] - curr[0], next[1] - curr[1], 0)
     const brickLimit = edgeLength / (brickLength + mortarThickness)
 
-    const blockOutline = traceBounds(prev, curr, next, finl, winding)
+    const blockOutline = traceBounds(prev, curr, next, finl, winding, nonHullPoints.find(tmp => tmp === i))
 
     const color = i % 2 ? colorNameToRgb('orange') : colorNameToRgb('green')
 
@@ -134,14 +146,14 @@ function main () {
   const complex = [[0, 0], [7.2, 0], [14.2, 9.9], [18, 9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
   const complex2 = [[0, 0], [7.2, 0], [14.2, -9.9], [18, -9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
 
-  for (let i = 0; i < 1; i++) {
+  for (let i = 0; i < 2; i++) {
     const winding = i % 2
     const h = i * (brickHeight + mortarThickness)
-    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding)))
-    shapes.push(translate([-45, 0, h], iterateEdges(box, winding)))
-    shapes.push(translate([-45, 20, h], iterateEdges(backwards, winding)))
-    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding)))
-    shapes.push(translate([-10, 0, h], iterateEdges(complex, winding)))
+    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, false)))
+    shapes.push(translate([-45, 0, h], iterateEdges(box, winding, false)))
+    shapes.push(translate([-45, 20, h], iterateEdges(backwards, winding, false)))
+    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, false)))
+    shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, false)))
     shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, true)))
   }
 
