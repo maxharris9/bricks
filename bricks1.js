@@ -7,35 +7,55 @@ const { extrudeLinear } = jscad.extrusions
 const { subtract } = jscad.booleans
 const { hull } = jscad.hulls
 
-function traceBounds (prev, curr, next, finl, winding, isNonHullPoint) {
+function traceBounds (prev, curr, next, finl, winding, isCurrentNonHullPoint, isNextNonHullPoint) {
   const p = line([prev, curr])
   const c = line([curr, next])
   const n = line([next, finl])
 
   const offsetOptions = { delta: -1.0, corners: 'edge' }
-  // const pp = colorize(colorNameToRgb('goldenrod'), offset(offsetOptions, p))
+  const pp = colorize(colorNameToRgb('goldenrod'), offset(offsetOptions, p))
   const cp = colorize(colorNameToRgb('orange'), offset(offsetOptions, c))
   const np = colorize(colorNameToRgb('red'), offset(offsetOptions, n))
 
-  const ppp = colorize(colorNameToRgb('red'), offset(Object.assign({}, offsetOptions, { delta: isNonHullPoint ? -1.0 : -1.1 }), p))
-  // const cpp = colorize(colorNameToRgb('red'), offset(Object.assign({}, offsetOptions, { delta: -1.1 }), c))
-  // const npp = colorize(colorNameToRgb('red'), offset(Object.assign({}, offsetOptions, { delta: -1.1 }), n))
+  const ppp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.0 : -1.1 }), p)
+  const cpp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.0 : -1.1 }), c)
+  const npp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.1 : -1.0 }), n)
 
-  return polygon({
-    points: winding
-      ? [
-          intersect(c.points.flat(), np.points.flat(), false),
-          intersect(np.points.flat(), cp.points.flat(), false),
-          intersect(cp.points.flat(), p.points.flat(), false),
-          intersect(p.points.flat(), c.points.flat(), false)
-        ]
-      : [
-          intersect(ppp.points.flat(), cp.points.flat(), false),
-          intersect(c.points.flat(), ppp.points.flat(), false),
-          intersect(n.points.flat(), c.points.flat(), false),
-          intersect(cp.points.flat(), n.points.flat(), false)
-        ]
-  })
+  const s_np = offset(Object.assign({}, offsetOptions, { delta: mortarThickness }), n)
+
+  if (isNextNonHullPoint) {
+    return polygon({
+      points: winding
+        ? [
+            intersect(c.points.flat(), npp.points.flat(), false),
+            intersect(npp.points.flat(), cp.points.flat(), false),
+            intersect(cp.points.flat(), p.points.flat(), false),
+            intersect(p.points.flat(), c.points.flat(), false)
+          ]
+        : [
+            intersect(ppp.points.flat(), cp.points.flat(), false), // left start
+            intersect(c.points.flat(), ppp.points.flat(), false), // right start
+            intersect(s_np.points.flat(), c.points.flat(), false), // right end
+            intersect(cp.points.flat(), s_np.points.flat(), false) // left end
+          ]
+    })
+  } else {
+    return polygon({
+      points: winding
+        ? [
+            intersect(c.points.flat(), npp.points.flat(), false),
+            intersect(npp.points.flat(), cp.points.flat(), false),
+            intersect(cp.points.flat(), p.points.flat(), false),
+            intersect(p.points.flat(), c.points.flat(), false)
+          ]
+        : [
+            intersect(ppp.points.flat(), cp.points.flat(), false), // left start
+            intersect(c.points.flat(), ppp.points.flat(), false), // right start
+            intersect(n.points.flat(), c.points.flat(), false), // right end
+            intersect(cp.points.flat(), n.points.flat(), false) // left end
+          ]
+    })
+  }
 }
 
 function length (x, y, z) {
@@ -65,7 +85,7 @@ function iterateEdges (points, winding, showMortarSlices = false) {
     const edgeLength = length(next[0] - curr[0], next[1] - curr[1], 0)
     const brickLimit = edgeLength / (brickLength + mortarThickness)
 
-    const blockOutline = traceBounds(prev, curr, next, finl, winding, nonHullPoints.find(tmp => tmp === i))
+    const blockOutline = traceBounds(prev, curr, next, finl, winding, nonHullPoints.find(tmp => tmp === i), nonHullPoints.find(tmp => tmp === i + 1))
 
     const color = i % 2 ? colorNameToRgb('orange') : colorNameToRgb('green')
 
@@ -82,7 +102,7 @@ function iterateEdges (points, winding, showMortarSlices = false) {
       )
 
       if (showMortarSlices) {
-        shapes.push(colorize(colorNameToRgb('gray'), mortarSlice))
+        // shapes.push(colorize(colorNameToRgb('gray'), mortarSlice))
       } else {
         mortar.push(colorize(colorNameToRgb('gray'), mortarSlice))
       }
@@ -149,11 +169,11 @@ function main () {
   for (let i = 0; i < 2; i++) {
     const winding = i % 2
     const h = i * (brickHeight + mortarThickness)
-    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, false)))
-    shapes.push(translate([-45, 0, h], iterateEdges(box, winding, false)))
-    shapes.push(translate([-45, 20, h], iterateEdges(backwards, winding, false)))
-    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, false)))
-    shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, false)))
+    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, true)))
+    shapes.push(translate([-45, 0, h], iterateEdges(box, winding, true)))
+    shapes.push(translate([-45, 20, h], iterateEdges(backwards, winding, true)))
+    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, true)))
+    shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, true)))
     shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, true)))
   }
 
