@@ -7,54 +7,52 @@ const { extrudeLinear } = jscad.extrusions
 const { subtract } = jscad.booleans
 const { hull } = jscad.hulls
 
+const classifyPoint = require('robust-point-in-polygon')
+
 function traceBounds (prev, curr, next, finl, winding, isCurrentNonHullPoint, isNextNonHullPoint) {
   const p = line([prev, curr])
   const c = line([curr, next])
   const n = line([next, finl])
 
   const offsetOptions = { delta: -1.0, corners: 'edge' }
-  const pp = colorize(colorNameToRgb('goldenrod'), offset(offsetOptions, p))
+  //   const pp = colorize(colorNameToRgb('goldenrod'), offset(offsetOptions, p))
   const cp = colorize(colorNameToRgb('orange'), offset(offsetOptions, c))
-  const np = colorize(colorNameToRgb('red'), offset(offsetOptions, n))
+  //   const np = colorize(colorNameToRgb('red'), offset(offsetOptions, n))
 
   const ppp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.0 : -1.1 }), p)
-  const cpp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.0 : -1.1 }), c)
+  //   const cpp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.0 : -1.1 }), c)
   const npp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.1 : -1.0 }), n)
 
   const s_np = offset(Object.assign({}, offsetOptions, { delta: mortarThickness }), n)
 
   if (isNextNonHullPoint) {
-    return polygon({
-      points: winding
-        ? [
-            intersect(c.points.flat(), npp.points.flat(), false),
-            intersect(npp.points.flat(), cp.points.flat(), false),
-            intersect(cp.points.flat(), p.points.flat(), false),
-            intersect(p.points.flat(), c.points.flat(), false)
-          ]
-        : [
-            intersect(ppp.points.flat(), cp.points.flat(), false), // left start
-            intersect(c.points.flat(), ppp.points.flat(), false), // right start
-            intersect(s_np.points.flat(), c.points.flat(), false), // right end
-            intersect(cp.points.flat(), s_np.points.flat(), false) // left end
-          ]
-    })
+    return winding
+      ? [
+          intersect(c.points.flat(), npp.points.flat(), false),
+          intersect(npp.points.flat(), cp.points.flat(), false),
+          intersect(cp.points.flat(), p.points.flat(), false),
+          intersect(p.points.flat(), c.points.flat(), false)
+        ]
+      : [
+          intersect(ppp.points.flat(), cp.points.flat(), false), // left start
+          intersect(c.points.flat(), ppp.points.flat(), false), // right start
+          intersect(s_np.points.flat(), c.points.flat(), false), // right end
+          intersect(cp.points.flat(), s_np.points.flat(), false) // left end
+        ]
   } else {
-    return polygon({
-      points: winding
-        ? [
-            intersect(c.points.flat(), npp.points.flat(), false),
-            intersect(npp.points.flat(), cp.points.flat(), false),
-            intersect(cp.points.flat(), p.points.flat(), false),
-            intersect(p.points.flat(), c.points.flat(), false)
-          ]
-        : [
-            intersect(ppp.points.flat(), cp.points.flat(), false), // left start
-            intersect(c.points.flat(), ppp.points.flat(), false), // right start
-            intersect(n.points.flat(), c.points.flat(), false), // right end
-            intersect(cp.points.flat(), n.points.flat(), false) // left end
-          ]
-    })
+    return winding
+      ? [
+          intersect(c.points.flat(), npp.points.flat(), false),
+          intersect(npp.points.flat(), cp.points.flat(), false),
+          intersect(cp.points.flat(), p.points.flat(), false),
+          intersect(p.points.flat(), c.points.flat(), false)
+        ]
+      : [
+          intersect(ppp.points.flat(), cp.points.flat(), false), // left start
+          intersect(c.points.flat(), ppp.points.flat(), false), // right start
+          intersect(n.points.flat(), c.points.flat(), false), // right end
+          intersect(cp.points.flat(), n.points.flat(), false) // left end
+        ]
   }
 }
 
@@ -67,15 +65,13 @@ function iterateEdges (points, winding, showMortarSlices = false) {
   const len = points.length
 
   const convexPoints = hull(polygon({ points: points })).sides.map(item => item[0])
-
-  const nonHullPoints = []
+  const nonHullPoints = [] // [2, 3] for complex or [1, 4] for complex2
   for (let index = 0; index < points.length; index++) {
-    const point = points[index]
-    if (!convexPoints.find(cp => cp[0] === point[0] && cp[1] === point[1])) {
+    const p = points[index]
+    if (classifyPoint(convexPoints, p)) {
       nonHullPoints.push(index)
     }
   }
-
   for (let i = 0; i < len - 1; i++) {
     const prev = (i === 0) ? points[len - 1] : points[i - 1]
     const curr = (i === 0) ? points[0] : points[i]
@@ -89,7 +85,16 @@ function iterateEdges (points, winding, showMortarSlices = false) {
 
     const color = i % 2 ? colorNameToRgb('orange') : colorNameToRgb('green')
 
-    const block = colorize(color, extrudeLinear({ height: brickHeight }, blockOutline))
+    const block = colorize(color, extrudeLinear({ height: brickHeight }, polygon({ points: blockOutline })))
+
+    // shapes.push(
+    //   colorize(colorNameToRgb('goldenrod'), path2.fromPoints({}, [blockOutline[0], blockOutline[1]])) )
+    // shapes.push(
+    //   colorize(colorNameToRgb('green'), path2.fromPoints({}, [blockOutline[1], blockOutline[2]])) )
+    // shapes.push(
+    //   colorize(colorNameToRgb('blue'), path2.fromPoints({}, [blockOutline[2], blockOutline[3]])) )
+    // shapes.push(
+    //   colorize(colorNameToRgb('red'), path2.fromPoints({}, [blockOutline[3], blockOutline[0]])) )
 
     // now lay mortar and subtract it from the block
     const mortar = []
@@ -163,16 +168,18 @@ function main () {
   const box = [[0, 0], [9.8, 0], [9.8, 9.8], [0, 9.8]]
   const backwards = [[0, 9.8], [9.8, 9.8], [9.8, 0], [0, 0]]
   const pentagon = [[0, 0], [0, 6], [6, 10], [12, 6], [12, 0]]
+  const mshape = [[12, 0], [12, 10], [7, 6], [3, 6], [0, 10], [0, 0]]
   const complex = [[0, 0], [7.2, 0], [14.2, 9.9], [18, 9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
   const complex2 = [[0, 0], [7.2, 0], [14.2, -9.9], [18, -9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
 
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 1; i++) {
     const winding = i % 2
     const h = i * (brickHeight + mortarThickness)
     shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, true)))
     shapes.push(translate([-45, 0, h], iterateEdges(box, winding, true)))
     shapes.push(translate([-45, 20, h], iterateEdges(backwards, winding, true)))
     shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, true)))
+    shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, true)))
     shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, true)))
     shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, true)))
   }
