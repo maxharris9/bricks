@@ -15,23 +15,26 @@ function traceBounds (prev, curr, next, finl, winding, isCurrentNonHullPoint, is
   const n = line([next, finl])
 
   const offsetOptions = { delta: -1.0, corners: 'edge' }
-  //   const pp = colorize(colorNameToRgb('goldenrod'), offset(offsetOptions, p))
+
   const cp = colorize(colorNameToRgb('orange'), offset(offsetOptions, c))
-  //   const np = colorize(colorNameToRgb('red'), offset(offsetOptions, n))
-
   const ppp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.0 : -1.1 }), p)
-  //   const cpp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.0 : -1.1 }), c)
-  const npp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.1 : -1.0 }), n)
-
   const s_np = offset(Object.assign({}, offsetOptions, { delta: mortarThickness }), n)
 
+  const pp = colorize(colorNameToRgb('goldenrod'), offset(offsetOptions, p))
+  const cpp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.1 : -1.0 }), c)
+  const np = colorize(colorNameToRgb('red'), offset(offsetOptions, n))
+  const npp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.1 : -1.0 }), n)
+
+  const fillerResult = [[-100, -0], [-100, -100], [-200, -200], [-300, -300]] // keeps stuff downstream from exploding
+
   if (isNextNonHullPoint) {
+    const s_pp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? mortarThickness : 0 }), p)
     return winding
       ? [
-          intersect(c.points.flat(), npp.points.flat(), false),
-          intersect(npp.points.flat(), cp.points.flat(), false),
-          intersect(cp.points.flat(), p.points.flat(), false),
-          intersect(p.points.flat(), c.points.flat(), false)
+          intersect(cp.points.flat(), s_pp.points.flat(), false), // SW
+          intersect(s_pp.points.flat(), c.points.flat(), false), // SE
+          intersect(c.points.flat(), np.points.flat(), false), // NE
+          intersect(np.points.flat(), cp.points.flat(), false) // NW
         ]
       : [
           intersect(ppp.points.flat(), cp.points.flat(), false), // left start
@@ -40,12 +43,14 @@ function traceBounds (prev, curr, next, finl, winding, isCurrentNonHullPoint, is
           intersect(cp.points.flat(), s_np.points.flat(), false) // left end
         ]
   } else {
+    const special_p = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? mortarThickness : 0 }), p)
     return winding
       ? [
-          intersect(c.points.flat(), npp.points.flat(), false),
-          intersect(npp.points.flat(), cp.points.flat(), false),
-          intersect(cp.points.flat(), p.points.flat(), false),
-          intersect(p.points.flat(), c.points.flat(), false)
+          // fillerResult
+          intersect(cp.points.flat(), special_p.points.flat(), false), // possibly wrong
+          intersect(special_p.points.flat(), c.points.flat(), false), // possibly wrong
+          intersect(c.points.flat(), npp.points.flat(), false), // possibly wrong
+          intersect(npp.points.flat(), cp.points.flat(), false) // possibly wrong
         ]
       : [
           intersect(ppp.points.flat(), cp.points.flat(), false), // left start
@@ -172,14 +177,14 @@ function main () {
   const complex = [[0, 0], [7.2, 0], [14.2, 9.9], [18, 9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
   const complex2 = [[0, 0], [7.2, 0], [14.2, -9.9], [18, -9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
 
-  for (let i = 0; i < 1; i++) {
+  for (let i = 0; i < 2; i++) {
     const winding = i % 2
     const h = i * (brickHeight + mortarThickness)
     shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, true)))
     shapes.push(translate([-45, 0, h], iterateEdges(box, winding, true)))
     shapes.push(translate([-45, 20, h], iterateEdges(backwards, winding, true)))
     shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, true)))
-    shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, true)))
+    shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, false)))
     shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, true)))
     shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, true)))
   }
