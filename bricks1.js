@@ -19,13 +19,7 @@ function traceBounds (prev, curr, next, finl, winding, isCurrentNonHullPoint, is
   const cp = colorize(colorNameToRgb('orange'), offset(offsetOptions, c))
   const ppp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.0 : -1.1 }), p)
   const s_np = offset(Object.assign({}, offsetOptions, { delta: mortarThickness }), n)
-
-  const pp = colorize(colorNameToRgb('goldenrod'), offset(offsetOptions, p))
-  const cpp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.1 : -1.0 }), c)
   const np = colorize(colorNameToRgb('red'), offset(offsetOptions, n))
-  const npp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.1 : -1.0 }), n)
-
-  const fillerResult = [[-100, -0], [-100, -100], [-200, -200], [-300, -300]] // keeps stuff downstream from exploding
 
   if (isNextNonHullPoint) {
     const s_pp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? mortarThickness : 0 }), p)
@@ -44,13 +38,13 @@ function traceBounds (prev, curr, next, finl, winding, isCurrentNonHullPoint, is
         ]
   } else {
     const special_p = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? mortarThickness : 0 }), p)
+    const a_npp = offset(Object.assign({}, offsetOptions, { delta: isNextNonHullPoint ? -1.0 : -1.1 }), n)
     return winding
       ? [
-          // fillerResult
-          intersect(cp.points.flat(), special_p.points.flat(), false), // possibly wrong
-          intersect(special_p.points.flat(), c.points.flat(), false), // possibly wrong
-          intersect(c.points.flat(), npp.points.flat(), false), // possibly wrong
-          intersect(npp.points.flat(), cp.points.flat(), false) // possibly wrong
+          intersect(cp.points.flat(), special_p.points.flat(), false),
+          intersect(special_p.points.flat(), c.points.flat(), false),
+          intersect(c.points.flat(), a_npp.points.flat(), false),
+          intersect(a_npp.points.flat(), cp.points.flat(), false)
         ]
       : [
           intersect(ppp.points.flat(), cp.points.flat(), false), // left start
