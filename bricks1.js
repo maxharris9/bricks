@@ -9,48 +9,43 @@ const { hull } = jscad.hulls
 
 const classifyPoint = require('robust-point-in-polygon')
 
+// from http://paulbourke.net/geometry/pointlineplane/
+function intersect (line0, line1, enforceSegments = false) {
+  const [x1, y1, x2, y2] = line0.points.flat()
+  const [x3, y3, x4, y4] = line1.points.flat()
+  // there is likely no intersection if either line is a point, so just bail
+  if ((x1 === x2 && y1 === y2) || (x3 === x4 && y3 === y4)) { return false }
+
+  const denominator = ((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1))
+
+  // ensure that the lines are not parallel
+  if (denominator === 0) { return false }
+
+  const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denominator
+  const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denominator
+
+  // is the intersection within the segment?
+  if (enforceSegments && (ua < 0 || ua > 1 || ub < 0 || ub > 1)) { return false }
+
+  return [x1 + ua * (x2 - x1), y1 + ua * (y2 - y1)]
+}
+
 function traceBounds (prev, curr, next, finl, winding, isCurrentNonHullPoint, isNextNonHullPoint) {
-  const p = line([prev, curr])
-  const c = line([curr, next])
-  const n = line([next, finl])
+  const p0 = line([prev, curr])
+  const c0 = line([curr, next])
+  const n0 = line([next, finl])
 
-  const p1 = offset({ delta: isCurrentNonHullPoint ? -1.0 : -1.1, corners: 'edge' }, p)
-	const p2 = offset({ delta: isCurrentNonHullPoint ? mortarThickness : 0, corners: 'edge' }, p)
+  const p1 = offset({ delta: isCurrentNonHullPoint ? -1.0 : -1.1, corners: 'edge' }, p0)
+  const p2 = offset({ delta: isCurrentNonHullPoint ? mortarThickness : 0, corners: 'edge' }, p0)
 
-  const c1 = offset({ delta: -1.0, corners: 'edge' }, c)
+  const c1 = offset({ delta: -1.0, corners: 'edge' }, c0)
 
-	const n1 = offset({ delta: isNextNonHullPoint ? -1.0 : -1.1, corners: 'edge' }, n)
-	const n2 = offset({ delta: isNextNonHullPoint ? mortarThickness : 0, corners: 'edge' }, n)
+  const n1 = offset({ delta: isNextNonHullPoint ? -1.0 : -1.1, corners: 'edge' }, n0)
+  const n2 = offset({ delta: isNextNonHullPoint ? mortarThickness : 0, corners: 'edge' }, n0)
 
-  if (isNextNonHullPoint) {
-    return winding
-      ? [
-          intersect(c1.points.flat(), p2.points.flat(), false),
-          intersect(p2.points.flat(), c.points.flat(), false),
-          intersect(c.points.flat(), n1.points.flat(), false),
-          intersect(n1.points.flat(), c1.points.flat(), false)
-        ]
-      : [
-          intersect(p1.points.flat(), c1.points.flat(), false),
-          intersect(c.points.flat(), p1.points.flat(), false),
-          intersect(n2.points.flat(), c.points.flat(), false),
-          intersect(c1.points.flat(), n2.points.flat(), false)
-        ]
-  } else {
-    return winding
-      ? [
-          intersect(c1.points.flat(), p2.points.flat(), false),
-          intersect(p2.points.flat(), c.points.flat(), false),
-          intersect(c.points.flat(), n1.points.flat(), false),
-          intersect(n1.points.flat(), c1.points.flat(), false)
-        ]
-      : [
-          intersect(p1.points.flat(), c1.points.flat(), false),
-          intersect(c.points.flat(), p1.points.flat(), false),
-          intersect(n.points.flat(), c.points.flat(), false),
-          intersect(c1.points.flat(), n.points.flat(), false)
-        ]
-  }
+	return winding
+		? [intersect(c1, p2), intersect(p2, c0), intersect(c0, n1), intersect(n1, c1)]
+		: [intersect(p1, c1), intersect(c0, p1), intersect(n2, c0), intersect(c1, n2)]
 }
 
 function length (x, y, z) {
@@ -119,24 +114,6 @@ function iterateEdges (points, winding, showMortarSlices = false) {
   }
 
   return shapes
-}
-
-// from http://paulbourke.net/geometry/pointlineplane/
-function intersect ([x1, y1, x2, y2], [x3, y3, x4, y4], enforceSegments) {
-  // there is likely no intersection if either line is a point, so just bail
-  if ((x1 === x2 && y1 === y2) || (x3 === x4 && y3 === y4)) { return false }
-
-  const denominator = ((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1))
-
-  // ensure that the lines are not parallel
-  if (denominator === 0) { return false }
-  const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denominator
-  const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denominator
-
-  // is the intersection within the segment?
-  if (enforceSegments && (ua < 0 || ua > 1 || ub < 0 || ub > 1)) { return false }
-
-  return [x1 + ua * (x2 - x1), y1 + ua * (y2 - y1)]
 }
 
 const brickHeight = 0.75
