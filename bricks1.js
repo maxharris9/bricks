@@ -14,43 +14,41 @@ function traceBounds (prev, curr, next, finl, winding, isCurrentNonHullPoint, is
   const c = line([curr, next])
   const n = line([next, finl])
 
-  const offsetOptions = { delta: -1.0, corners: 'edge' }
+  const p1 = offset({ delta: isCurrentNonHullPoint ? -1.0 : -1.1, corners: 'edge' }, p)
+	const p2 = offset({ delta: isCurrentNonHullPoint ? mortarThickness : 0, corners: 'edge' }, p)
 
-  const cp = colorize(colorNameToRgb('orange'), offset(offsetOptions, c))
-  const ppp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? -1.0 : -1.1 }), p)
-  const s_np = offset(Object.assign({}, offsetOptions, { delta: mortarThickness }), n)
-  const np = colorize(colorNameToRgb('red'), offset(offsetOptions, n))
+  const c1 = offset({ delta: -1.0, corners: 'edge' }, c)
+
+	const n1 = offset({ delta: isNextNonHullPoint ? -1.0 : -1.1, corners: 'edge' }, n)
+	const n2 = offset({ delta: isNextNonHullPoint ? mortarThickness : 0, corners: 'edge' }, n)
 
   if (isNextNonHullPoint) {
-    const s_pp = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? mortarThickness : 0 }), p)
     return winding
       ? [
-          intersect(cp.points.flat(), s_pp.points.flat(), false), // SW
-          intersect(s_pp.points.flat(), c.points.flat(), false), // SE
-          intersect(c.points.flat(), np.points.flat(), false), // NE
-          intersect(np.points.flat(), cp.points.flat(), false) // NW
+          intersect(c1.points.flat(), p2.points.flat(), false),
+          intersect(p2.points.flat(), c.points.flat(), false),
+          intersect(c.points.flat(), n1.points.flat(), false),
+          intersect(n1.points.flat(), c1.points.flat(), false)
         ]
       : [
-          intersect(ppp.points.flat(), cp.points.flat(), false), // left start
-          intersect(c.points.flat(), ppp.points.flat(), false), // right start
-          intersect(s_np.points.flat(), c.points.flat(), false), // right end
-          intersect(cp.points.flat(), s_np.points.flat(), false) // left end
+          intersect(p1.points.flat(), c1.points.flat(), false),
+          intersect(c.points.flat(), p1.points.flat(), false),
+          intersect(n2.points.flat(), c.points.flat(), false),
+          intersect(c1.points.flat(), n2.points.flat(), false)
         ]
   } else {
-    const special_p = offset(Object.assign({}, offsetOptions, { delta: isCurrentNonHullPoint ? mortarThickness : 0 }), p)
-    const a_npp = offset(Object.assign({}, offsetOptions, { delta: isNextNonHullPoint ? -1.0 : -1.1 }), n)
     return winding
       ? [
-          intersect(cp.points.flat(), special_p.points.flat(), false),
-          intersect(special_p.points.flat(), c.points.flat(), false),
-          intersect(c.points.flat(), a_npp.points.flat(), false),
-          intersect(a_npp.points.flat(), cp.points.flat(), false)
+          intersect(c1.points.flat(), p2.points.flat(), false),
+          intersect(p2.points.flat(), c.points.flat(), false),
+          intersect(c.points.flat(), n1.points.flat(), false),
+          intersect(n1.points.flat(), c1.points.flat(), false)
         ]
       : [
-          intersect(ppp.points.flat(), cp.points.flat(), false), // left start
-          intersect(c.points.flat(), ppp.points.flat(), false), // right start
-          intersect(n.points.flat(), c.points.flat(), false), // right end
-          intersect(cp.points.flat(), n.points.flat(), false) // left end
+          intersect(p1.points.flat(), c1.points.flat(), false),
+          intersect(c.points.flat(), p1.points.flat(), false),
+          intersect(n.points.flat(), c.points.flat(), false),
+          intersect(c1.points.flat(), n.points.flat(), false)
         ]
   }
 }
