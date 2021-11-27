@@ -1,7 +1,6 @@
 const jscad = require('@jscad/modeling')
 const { polygon, line, cuboid } = jscad.primitives
 const { translate, rotate } = jscad.transforms
-const { colorize, colorNameToRgb } = jscad.colors
 const { offset } = jscad.expansions // TODO: replace this with something homegrown
 const { extrudeLinear } = jscad.extrusions
 const { subtract } = jscad.booleans
@@ -30,38 +29,36 @@ function intersect (line0, line1, enforceSegments = false) {
   return [x1 + ua * (x2 - x1), y1 + ua * (y2 - y1)]
 }
 
-function traceBounds (prev, curr, next, finl, winding, isCurrentNonHullPoint, isNextNonHullPoint) {
-  const p0 = line([prev, curr])
-  const c0 = line([curr, next])
-  const n0 = line([next, finl])
+function traceBounds ({ p0, c0, n0, winding, currentPointInside, nextPointInside }, { brickWidth, mortarThickness }) {
+  const brickWithMortar = brickWidth + mortarThickness
 
-  const p1 = offset({ delta: isCurrentNonHullPoint ? -1.0 : -1.1, corners: 'edge' }, p0)
-  const p2 = offset({ delta: isCurrentNonHullPoint ? mortarThickness : 0, corners: 'edge' }, p0)
+  const p1 = offset({ delta: currentPointInside ? -brickWidth : -brickWithMortar, corners: 'edge' }, p0)
+  const p2 = offset({ delta: currentPointInside ? mortarThickness : 0, corners: 'edge' }, p0)
 
-  const c1 = offset({ delta: -1.0, corners: 'edge' }, c0)
+  const c1 = offset({ delta: -brickWidth, corners: 'edge' }, c0)
 
-  const n1 = offset({ delta: isNextNonHullPoint ? -1.0 : -1.1, corners: 'edge' }, n0)
-  const n2 = offset({ delta: isNextNonHullPoint ? mortarThickness : 0, corners: 'edge' }, n0)
+  const n1 = offset({ delta: nextPointInside ? -brickWidth : -brickWithMortar, corners: 'edge' }, n0)
+  const n2 = offset({ delta: nextPointInside ? mortarThickness : 0, corners: 'edge' }, n0)
 
-	return winding
-		? [intersect(c1, p2), intersect(p2, c0), intersect(c0, n1), intersect(n1, c1)]
-		: [intersect(p1, c1), intersect(c0, p1), intersect(n2, c0), intersect(c1, n2)]
+  return winding
+    ? [intersect(c1, p2), intersect(p2, c0), intersect(c0, n1), intersect(n1, c1)]
+    : [intersect(p1, c1), intersect(c0, p1), intersect(n2, c0), intersect(c1, n2)]
 }
 
 function length (x, y, z) {
   return Math.sqrt(x * x + y * y + z * z)
 }
 
-function iterateEdges (points, winding, showMortarSlices = false) {
+function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const shapes = []
   const len = points.length
 
-  const convexPoints = hull(polygon({ points: points })).sides.map(item => item[0])
-  const nonHullPoints = [] // [2, 3] for complex or [1, 4] for complex2
-  for (let index = 0; index < points.length; index++) {
+  const convexPoints = hull(polygon({ points })).sides.map(item => item[0])
+  const innerPoints = []
+  for (let index = 0; index < len; index++) {
     const p = points[index]
     if (classifyPoint(convexPoints, p)) {
-      nonHullPoints.push(index)
+      innerPoints.push(index)
     }
   }
   for (let i = 0; i < len - 1; i++) {
@@ -71,38 +68,39 @@ function iterateEdges (points, winding, showMortarSlices = false) {
     const finl = (i === 0) ? points[2] : (i <= len - 3 ? points[i + 2] : points[0])
 
     const edgeLength = length(next[0] - curr[0], next[1] - curr[1], 0)
-    const brickLimit = edgeLength / (brickLength + mortarThickness)
+    const brickLimit = edgeLength / (brickInfo.brickLength + brickInfo.mortarThickness)
 
-    const blockOutline = traceBounds(prev, curr, next, finl, winding, nonHullPoints.find(tmp => tmp === i), nonHullPoints.find(tmp => tmp === i + 1))
-
-    const color = i % 2 ? colorNameToRgb('orange') : colorNameToRgb('green')
-
-    const block = colorize(color, extrudeLinear({ height: brickHeight }, polygon({ points: blockOutline })))
-
-    // shapes.push(
-    //   colorize(colorNameToRgb('goldenrod'), path2.fromPoints({}, [blockOutline[0], blockOutline[1]])) )
-    // shapes.push(
-    //   colorize(colorNameToRgb('green'), path2.fromPoints({}, [blockOutline[1], blockOutline[2]])) )
-    // shapes.push(
-    //   colorize(colorNameToRgb('blue'), path2.fromPoints({}, [blockOutline[2], blockOutline[3]])) )
-    // shapes.push(
-    //   colorize(colorNameToRgb('red'), path2.fromPoints({}, [blockOutline[3], blockOutline[0]])) )
+    const geometry = {
+      p0: line([prev, curr]),
+      c0: line([curr, next]),
+      n0: line([next, finl]),
+      winding,
+      currentPointInside: innerPoints.find(tmp => tmp === i),
+      nextPointInside: innerPoints.find(tmp => tmp === i + 1)
+    }
+    const blockOutline = traceBounds(geometry, brickInfo)
+    const block = extrudeLinear({ height: brickInfo.brickHeight }, polygon({ points: blockOutline }))
 
     // now lay mortar and subtract it from the block
     const mortar = []
     for (let j = 0; j < brickLimit; j++) {
-      const mortarSlice = layOnLine(curr.concat(0), next.concat(0),
+      const p0 = blockOutline[winding % 2 ? 1 : 2].concat(0)
+      const p1 = blockOutline[winding % 2 ? 2 : 1].concat(0)
+
+      const mortarSlice = layOnLine(
+        p0, p1,
         translate(
-          [1, 1, (-j * (brickLength + mortarThickness)) - (winding ? brickWidth + mortarThickness : 0)],
-          brick(3, 3, mortarThickness) // height, depth, width
+          [1, 1, (-j * (brickInfo.brickLength + brickInfo.mortarThickness)) + brickInfo.mortarThickness],
+          zeroedCuboid(3, 3, brickInfo.mortarThickness) // height, depth, width
         )
       )
 
       if (showMortarSlices) {
-        // shapes.push(colorize(colorNameToRgb('gray'), mortarSlice))
+        shapes.push(mortarSlice)
       } else {
-        mortar.push(colorize(colorNameToRgb('gray'), mortarSlice))
+        mortar.push(mortarSlice)
       }
+      // if (j > 1) {break}
     }
 
     let scratchBlock = block
@@ -116,11 +114,6 @@ function iterateEdges (points, winding, showMortarSlices = false) {
   return shapes
 }
 
-const brickHeight = 0.75
-const brickWidth = 1
-const mortarThickness = 1 / 10
-const brickLength = (2 * brickWidth) + mortarThickness
-
 function layOnLine (p2, p1, geometry) {
   const deltaX = p2[0] - p1[0]
   const deltaY = p2[1] - p1[1]
@@ -131,8 +124,17 @@ function layOnLine (p2, p1, geometry) {
   return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
 }
 
-function brick (brickLength, brickWidth, brickHeight) {
-  return cuboid({ size: [brickLength, brickWidth, brickHeight], center: [-brickLength / 2, -brickWidth / 2, -brickHeight / 2] })
+function zeroedCuboid (length, width, height) {
+  return cuboid({ size: [length, width, height], center: [-length / 2, -width / 2, -height / 2] })
+}
+
+function makeBrickInfo (brickWidth, brickHeight, mortarThickness) {
+  return {
+    brickWidth,
+    brickHeight,
+    brickLength: (2 * brickWidth) + mortarThickness,
+    mortarThickness
+  }
 }
 
 function main () {
@@ -146,19 +148,22 @@ function main () {
   const complex = [[0, 0], [7.2, 0], [14.2, 9.9], [18, 9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
   const complex2 = [[0, 0], [7.2, 0], [14.2, -9.9], [18, -9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
 
-  for (let i = 0; i < 2; i++) {
+  const brickInfo = makeBrickInfo(1.0, 0.75, 1.0 / 10.0)
+
+  const showMortarSlices = false
+  for (let i = 0; i < 4; i++) {
     const winding = i % 2
-    const h = i * (brickHeight + mortarThickness)
-    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, true)))
-    shapes.push(translate([-45, 0, h], iterateEdges(box, winding, true)))
-    shapes.push(translate([-45, 20, h], iterateEdges(backwards, winding, true)))
-    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, true)))
-    shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, false)))
-    shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, true)))
-    shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, true)))
+    const h = i * (brickInfo.brickHeight + brickInfo.mortarThickness) + brickInfo.mortarThickness
+    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([-45, 20, h], iterateEdges(backwards, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, brickInfo, showMortarSlices)))
   }
 
-  return translate([-10, 0, 0], shapes)
+  return rotate([-90, -90, 0], translate([-10, 0, 0], shapes))
 }
 
 module.exports = { main }
