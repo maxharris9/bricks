@@ -49,6 +49,14 @@ function length (x, y, z) {
   return Math.sqrt(x * x + y * y + z * z)
 }
 
+function getAngle (p0, p1, p2) {
+  const dAx = p1[0] - p0[0]
+  const dAy = p1[1] - p0[1]
+  const dBx = p2[0] - p1[0]
+  const dBy = p2[1] - p1[1]
+  return Math.atan2(dAx * dBy - dAy * dBx, dAx * dBx + dAy * dBy) * 180 / Math.PI
+}
+
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const shapes = []
   const len = points.length
@@ -81,12 +89,20 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
     const blockOutline = traceBounds(geometry, brickInfo)
     const block = extrudeLinear({ height: brickInfo.brickHeight }, polygon({ points: blockOutline }))
 
+    // blockOutline is always a quad of some kind, and we want to find the widest edge of it to guide our cuts:
+    //
+    //   0 /            \ 3
+    //    /              \
+    //   /                \
+    // 1 ------------------ 2
+
+    const angle = getAngle(blockOutline[0], blockOutline[1], blockOutline[2])
+    const p0 = blockOutline[angle < 90 ? 1 : 0].concat(0)
+    const p1 = blockOutline[angle < 90 ? 2 : 3].concat(0)
+
     // now lay mortar and subtract it from the block
     const mortar = []
     for (let j = 0; j < brickLimit; j++) {
-      const p0 = blockOutline[winding % 2 ? 1 : 2].concat(0)
-      const p1 = blockOutline[winding % 2 ? 2 : 1].concat(0)
-
       const mortarSlice = layOnLine(
         p0, p1,
         translate(
@@ -100,7 +116,6 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
       } else {
         mortar.push(mortarSlice)
       }
-      // if (j > 1) {break}
     }
 
     let scratchBlock = block
@@ -146,7 +161,7 @@ function main () {
   const pentagon = [[0, 0], [0, 6], [6, 10], [12, 6], [12, 0]]
   const mshape = [[12, 0], [12, 10], [7, 6], [3, 6], [0, 10], [0, 0]]
   const complex = [[0, 0], [7.2, 0], [14.2, 9.9], [18, 9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
-  const complex2 = [[0, 0], [7.2, 0], [14.2, -9.9], [18, -9.9], [19.8, 0], [29.6, 0], [29.6, 13.1], [0, 13.1]]
+  const complex2 = [[0, 0], [7.2, 0], [14.2, -9.9], [18, -9.9], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
 
   const brickInfo = makeBrickInfo(1.0, 0.75, 1.0 / 10.0)
 
