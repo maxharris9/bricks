@@ -15,8 +15,8 @@ function cutWall (shapes, brickInfo, curr, next, translateY) {
   const mortarSlice = layOnLine(
     [curr[0], curr[1], 0],
     [next[0], next[1], 0],
-		translate([0, translateY ? 1 : 0, 0],
-	    zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness) // height, depth, width
+    translate([0, translateY ? 1 : 0, 0],
+      zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness) // height, depth, width
     )
   )
 
@@ -50,18 +50,18 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
     for (let i = 0; i < points.length - 1; i++) {
       if (!innerPoints.find(item => item === i)) { continue }
 
-      const curr = points[i - 1]
+      const curr = i === 0 ? points[points.length - 1] : points[i - 1]
       const next = points[i]
-      cutWall(cuttingPlanes, brickInfo, next, curr, true)
+      cutWall(cuttingPlanes, brickInfo, next, curr, winding)
     }
 
-    for (let i = 1; i < offsetPoints.length - 1; i++) { // TODO: fix asymmetry (i = 1) with circular access
+    for (let i = 0; i < offsetPoints.length - 1; i++) {
       const inverseI = (offsetPoints.length - 1) - i
       if (innerPoints.find(item => item === inverseI)) { continue }
 
-      const curr = offsetPoints[i - 1]
+      const curr = i === 0 ? offsetPoints[offsetPoints.length - 1] : offsetPoints[i - 1]
       const next = offsetPoints[i]
-      cutWall(cuttingPlanes, brickInfo, next, curr, true)
+      cutWall(cuttingPlanes, brickInfo, next, curr, winding)
     }
   } else {
     // then we visit the points inside the hull, and calculate the green cut lines by
@@ -72,7 +72,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
 
       const curr = points[i]
       const next = points[i + 1]
-      cutWall(cuttingPlanes, brickInfo, curr, next, false)
+      cutWall(cuttingPlanes, brickInfo, curr, next, winding)
     }
 
     // then we visit the offset points in the opposite order, as indicated in the diagram,
