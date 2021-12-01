@@ -5,6 +5,8 @@ const { offset } = jscad.expansions // TODO: replace this with something homegro
 const { extrudeLinear } = jscad.extrusions
 const { subtract } = jscad.booleans
 const { hull } = jscad.hulls
+const { normal, normalize, fromValues } = jscad.maths.vec2
+const { path2, line2, geom2 } = jscad.geometries
 
 const classifyPoint = require('robust-point-in-polygon')
 
@@ -62,6 +64,7 @@ function getAngle (p0, p1, p2) {
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const shapes = []
   const len = points.length
+  console.log('points upon iterateEdges():', points)
 
   const convexPoints = hull(polygon({ points })).sides.map(item => item[0])
   const innerPoints = []
@@ -71,6 +74,68 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
     if (classifyPoint(convexPoints, p)) {
       innerPoints.push(index)
     }
+  }
+
+  // first we preallocate a result array of 2 * n slots
+  const result = []
+
+  const offsetPoints = findOffset(points.slice().reverse(), -brickInfo.brickWidth)
+
+  shapes.push(extrudeLinear({ height: brickInfo.brickHeight }, polygon({ points: [points, offsetPoints] })))
+
+  // then we visit the points inside the hull, and calculate the green cut lines by
+  // intersecting the corresponding offset line with a line normal to the current line
+  // segment (in this case line 1-2)
+  const specialPoints = points.slice()
+  //   const specialPoints = winding ? points.slice() : points.slice().reverse()
+  for (let i = 0; i < specialPoints.length - 1; i++) {
+    if (!innerPoints.find(item => item === i)) { continue }
+    const curr = specialPoints[i]
+    const next = specialPoints[i + 1]
+
+    const c3 = [curr[0], curr[1], 0]
+    const n3 = [next[0], next[1], 0]
+
+    const mortarSlice = layOnLine(
+      c3,
+      n3,
+      translate(
+        [1, 1, 0],
+        zeroedCuboid(3, 3, brickInfo.mortarThickness) // height, depth, width
+      )
+    )
+
+    shapes.push(mortarSlice)
+  }
+
+  // then we visit the offset points in the opposite order, as indicated in the diagram,
+  // finding all the red cut lines. each cut line is placed in its slot in order
+  // for (let i = 0; i < )
+
+  // then we make one final pass over the combined loops, cutting out each block
+  console.log('points.length:', points.length, 'offsetPoints.length:', offsetPoints.length, 'innerPoints:', innerPoints)
+  console.log('points:', points, 'offsetPoints', offsetPoints)
+  const specialOffsetPoints = offsetPoints.slice()
+  //   const specialOffsetPoints = winding ? offsetPoints.slice() : offsetPoints.slice().reverse()
+  for (let i = 0; i < specialOffsetPoints.length - 1; i++) {
+    const inverseI = (specialOffsetPoints.length - 1) - i
+    console.log('i:', i, 'inverseI:', inverseI)
+    if (innerPoints.find(item => item === inverseI)) { continue }
+
+    // const prev = (i === 0) ? offsetPoints[offsetPoints.length - 1] : points[i - 1]
+    const curr = (i === 0) ? specialOffsetPoints[0] : specialOffsetPoints[i]
+    const next = (i === 0) ? specialOffsetPoints[1] : specialOffsetPoints[i + 1]
+
+    const mortarSlice = layOnLine(
+      [curr[0], curr[1], 0],
+      [next[0], next[1], 0],
+      translate(
+        [1, 1, 0],
+        zeroedCuboid(3, 3, brickInfo.mortarThickness) // height, depth, width
+      )
+    )
+
+    shapes.push(mortarSlice)
   }
 
   for (let i = 0; i < len - 1; i++) {
@@ -137,19 +202,19 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
       }
       */
 
-      const mortarSlice = layOnLine(
-        p0, p1,
-        translate(
-          [1, 1, (-j * (brickInfo.brickLength + brickInfo.mortarThickness)) + brickInfo.mortarThickness],
-          zeroedCuboid(3, 3, brickInfo.mortarThickness) // height, depth, width
-        )
-      )
+      //       const mortarSlice = layOnLine(
+      //         p0, p1,
+      //         translate(
+      //           [1, 1, (-j * (brickInfo.brickLength + brickInfo.mortarThickness)) + brickInfo.mortarThickness],
+      //           zeroedCuboid(3, 3, brickInfo.mortarThickness) // height, depth, width
+      //         )
+      //       )
 
-      if (showMortarSlices) {
-        shapes.push(mortarSlice)
-      } else {
-        mortar.push(mortarSlice)
-      }
+      //       if (showMortarSlices) {
+      //         shapes.push(mortarSlice)
+      //       } else {
+      //         mortar.push(mortarSlice)
+      //       }
     }
 
     let scratchBlock = block
@@ -157,7 +222,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
       scratchBlock = subtract(scratchBlock, mortar[k])
     }
 
-    shapes.push(scratchBlock)
+    //     shapes.push(scratchBlock)
   }
 
   return shapes
@@ -186,6 +251,46 @@ function makeBrickInfo (brickWidth, brickHeight, mortarThickness) {
   }
 }
 
+// https://stackoverflow.com/a/54241014/53140
+function findOffset (points, offset) {
+  const pts = points.map(point => ({ x: point[0], y: point[1] })) // TODO: remove
+  const newPoints = []
+  for (let j = 0; j < pts.length; j++) {
+    let i = (j - 1)
+    if (i < 0) i += pts.length
+    const k = (j + 1) % pts.length
+
+    let v1 = [pts[j].x - pts[i].x, pts[j].y - pts[i].y]
+    const mag1 = Math.sqrt(v1[0] * v1[0] + v1[1] * v1[1])
+    v1 = [v1[0] / mag1, v1[1] / mag1]
+    v1 = [v1[0] * offset, v1[1] * offset]
+    const n1 = [-v1[1], v1[0]]
+    const x1 = pts[i].x + n1[0]
+    const y1 = pts[i].y + n1[1]
+    const x2 = pts[j].x + n1[0]
+    const y2 = pts[j].y + n1[1]
+
+    let v2 = [pts[k].x - pts[j].x, pts[k].y - pts[j].y]
+    const mag2 = Math.sqrt(v2[0] * v2[0] + v2[1] * v2[1])
+    v2 = [v2[0] / mag2, v2[1] / mag2]
+    v2 = [v2[0] * offset, v2[1] * offset]
+    const n2 = [-v2[1], v2[0]]
+    const x3 = pts[j].x + n2[0]
+    const y3 = pts[j].y + n2[1]
+    const x4 = pts[k].x + n2[0]
+    const y4 = pts[k].y + n2[1]
+
+    const den = ((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1))
+    const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / den
+    const x = x1 + ua * (x2 - x1)
+    const y = y1 + ua * (y2 - y1)
+
+    newPoints.push([x, y])
+  }
+
+  return newPoints
+}
+
 function main () {
   const shapes = []
 
@@ -200,7 +305,7 @@ function main () {
   const brickInfo = makeBrickInfo(1.0, 0.75, 1.0 / 10.0)
 
   const showMortarSlices = true
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 1; i++) {
     const winding = i % 2
     const h = i * (brickInfo.brickHeight + brickInfo.mortarThickness) + brickInfo.mortarThickness
     // shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
