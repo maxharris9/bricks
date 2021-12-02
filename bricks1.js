@@ -46,45 +46,28 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   // shapes.push(thing)
 
   const cuttingPlanes = []
-  if (winding) {
-    for (let i = 0; i < points.length - 1; i++) {
-      if (!innerPoints.find(item => item === i)) { continue }
+  // then we visit the points inside the hull, and calculate the green cut lines by
+  // intersecting the corresponding offset line with a line normal to the current line
+  // segment
+  for (let i = 0; i < points.length - 1; i++) {
+    if (!innerPoints.find(item => item === i)) { continue }
 
-      const curr = i === 0 ? points[points.length - 1] : points[i - 1]
-      const next = points[i]
-      cutWall(cuttingPlanes, brickInfo, next, curr, winding)
-    }
+    const next = winding
+      ? i === 0 ? points[points.length - 1] : points[i - 1]
+      : points[i + 1]
+    cutWall(cuttingPlanes, brickInfo, points[i], next, winding)
+  }
 
-    for (let i = 0; i < offsetPoints.length - 1; i++) {
-      const inverseI = (offsetPoints.length - 1) - i
-      if (innerPoints.find(item => item === inverseI)) { continue }
+  // then we visit the offset points in the opposite order finding all the red cut lines.
+  // each cut line is placed in its slot in order
+  for (let i = 0; i < offsetPoints.length - 1; i++) {
+    const inverseI = (offsetPoints.length - 1) - i
+    if (innerPoints.find(item => item === inverseI)) { continue }
 
-      const curr = i === 0 ? offsetPoints[offsetPoints.length - 1] : offsetPoints[i - 1]
-      const next = offsetPoints[i]
-      cutWall(cuttingPlanes, brickInfo, next, curr, winding)
-    }
-  } else {
-    // then we visit the points inside the hull, and calculate the green cut lines by
-    // intersecting the corresponding offset line with a line normal to the current line
-    // segment (in this case line 1-2)
-    for (let i = 0; i < points.length - 1; i++) {
-      if (!innerPoints.find(item => item === i)) { continue }
-
-      const curr = points[i]
-      const next = points[i + 1]
-      cutWall(cuttingPlanes, brickInfo, curr, next, winding)
-    }
-
-    // then we visit the offset points in the opposite order, as indicated in the diagram,
-    // finding all the red cut lines. each cut line is placed in its slot in order
-    for (let i = 0; i < offsetPoints.length - 1; i++) {
-      const inverseI = (offsetPoints.length - 1) - i
-      if (innerPoints.find(item => item === inverseI)) { continue }
-
-      const curr = offsetPoints[i]
-      const next = offsetPoints[i + 1]
-      cutWall(cuttingPlanes, brickInfo, curr, next, false)
-    }
+    const next = winding
+      ? i === 0 ? offsetPoints[offsetPoints.length - 1] : offsetPoints[i - 1]
+      : offsetPoints[i + 1]
+    cutWall(cuttingPlanes, brickInfo, offsetPoints[i], next, winding)
   }
 
   let scratchBlock = thing
