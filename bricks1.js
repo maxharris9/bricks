@@ -11,25 +11,23 @@ function length (x, y, z) {
   return Math.sqrt(x * x + y * y + z * z)
 }
 
-function cutWall (shapes, brickInfo, curr, next, translateY) {
-  const mortarSlice = layOnLine(
+function cutWall (brickInfo, curr, next, translateY) {
+  return layOnLine(
     [curr[0], curr[1], 0],
     [next[0], next[1], 0],
     translate([0, translateY ? brickInfo.brickWidth : 0, 0],
       zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness) // height, depth, width
     )
   )
-
-  shapes.push(mortarSlice)
 }
 
-function cutAlongPoints (points, i, winding, cuttingPlanes, brickInfo) {
+function cutAlongPoints (points, i, winding, brickInfo) {
   const next = winding
     ? i === 0
         ? points[points.length - 1]
         : points[i - 1]
     : points[i + 1]
-  cutWall(cuttingPlanes, brickInfo, points[i], next, winding)
+  return cutWall(brickInfo, points[i], next, winding)
 }
 
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
@@ -56,14 +54,14 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   // cut the last joint first
   const first = offsetPoints.length - 1
   const last = winding ? 0 : offsetPoints.length - 2
-  cutWall(cuttingPlanes, brickInfo, offsetPoints[first], offsetPoints[last], !winding)
+  cuttingPlanes.push(cutWall(brickInfo, offsetPoints[first], offsetPoints[last], !winding))
 
   // then we visit the points inside the hull, and calculate the green cut lines by
   // intersecting the corresponding offset line with a line normal to the current line
   // segment
   for (let i = 0; i < points.length - 1; i++) {
     if (!innerPoints.find(item => item === i)) { continue }
-    cutAlongPoints(points, i, winding, cuttingPlanes, brickInfo)
+    cuttingPlanes.push(cutAlongPoints(points, i, winding, brickInfo))
   }
 
   // then we visit the offset points in the opposite order finding all the red cut lines.
@@ -71,7 +69,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   for (let i = 0; i < offsetPoints.length - 1; i++) {
     const inverseI = (offsetPoints.length - 1) - i
     if (innerPoints.find(item => item === inverseI)) { continue }
-    cutAlongPoints(offsetPoints, i, winding, cuttingPlanes, brickInfo)
+    cuttingPlanes.push(cutAlongPoints(offsetPoints, i, winding, brickInfo))
   }
 
   let scratchBlock = thing
