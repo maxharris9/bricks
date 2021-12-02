@@ -53,16 +53,16 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   // then we visit the points inside the hull, and calculate the green cut lines by
   // intersecting the corresponding offset line with a line normal to the current line
   // segment
-  for (let i = 0; i < points.length - 1; i++) {
-    if (!innerPoints.find(item => item === i)) { continue }
-    cuttingPlanes[i] = cutAlongPoints(points, i, winding, brickInfo)
+  for (let i = 0; i < innerPoints.length; i++) {
+    const innerIndex = innerPoints[i]
+    cuttingPlanes[innerIndex] = cutAlongPoints(points, innerIndex, winding, brickInfo)
   }
 
   // then we visit the offset points in the opposite order finding all the red cut lines.
   // each cut line is placed in its slot in order
-  for (let i = 0; i < offsetPoints.length - 1; i++) {
+  for (let i = 0; i < offsetPoints.length - 1; i++) { // leave a slot for cutAlongPoints to wrap around the last corner
     const inverseI = (offsetPoints.length - 1) - i
-    if (innerPoints.find(item => item === inverseI)) { continue }
+    if (innerPoints.includes(inverseI)) { continue }
     cuttingPlanes[inverseI] = cutAlongPoints(offsetPoints, i, winding, brickInfo)
   }
 
