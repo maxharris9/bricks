@@ -7,27 +7,40 @@ const { hull } = jscad.hulls
 
 const classifyPoint = require('robust-point-in-polygon')
 
-function length (x, y, z) {
-  return Math.sqrt(x * x + y * y + z * z)
+function main () {
+  const shapes = []
+
+  const triangle = [[0, 0], [10, 10], [0, 10]]
+  const box = [[0, 0], [9.8, 0], [9.8, 9.8], [0, 9.8]]
+  const pentagon = [[12, 6], [6, 10], [0, 6], [0, 0], [12, 0]]
+  const mshape = [[12, 0], [12, 10], [7, 6], [3, 6], [0, 10], [0, 0]]
+  const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
+  const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
+
+  const brickInfo = makeBrickInfo(1.5, 0.75, 1.0 / 10.0)
+
+  const showMortarSlices = true
+  for (let i = 0; i < 2; i++) {
+    const winding = i % 2
+    const h = i * (brickInfo.brickHeight + brickInfo.mortarThickness) + brickInfo.mortarThickness
+    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, brickInfo, showMortarSlices)))
+  }
+
+  return shapes // rotate([-90, -90, 0], translate([50, 0, 0], shapes))
 }
 
-function cutWall (brickInfo, curr, next, translateY) {
-  return layOnLine(
-    [curr[0], curr[1], 0],
-    [next[0], next[1], 0],
-    translate([0, translateY ? brickInfo.brickWidth : 0, 0],
-      zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness) // height, depth, width
-    )
-  )
-}
-
-function cutAlongPoints (points, i, winding, brickInfo) {
-  const next = winding
-    ? i === 0
-        ? points[points.length - 1]
-        : points[i - 1]
-    : points[i + 1]
-  return cutWall(brickInfo, points[i], next, winding)
+function makeBrickInfo (brickWidth, brickHeight, mortarThickness) {
+  return {
+    brickWidth,
+    brickHeight,
+    brickLength: (2 * brickWidth) + mortarThickness,
+    mortarThickness
+  }
 }
 
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
@@ -42,10 +55,10 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
     }
   }
 
-  const offsetPoints = findOffset(points.slice().reverse(), -brickInfo.brickWidth)
+  const offsetPoints = traceOffset(points.slice().reverse(), -brickInfo.brickWidth)
   const cuttingPlanes = new Array(offsetPoints.length)
 
-  // cut the last joint first
+  // find the last joint first
   const first = offsetPoints.length - 1
   const last = winding ? 0 : offsetPoints.length - 2
   cuttingPlanes[0] = cutWall(brickInfo, offsetPoints[first], offsetPoints[last], !winding)
@@ -60,8 +73,9 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
 
   // then we visit the offset points in the opposite order finding all the red cut lines.
   // each cut line is placed in its slot in order
-  for (let i = 0; i < offsetPoints.length - 1; i++) { // leave a slot for cutAlongPoints to wrap around the last corner
-    const inverseI = (offsetPoints.length - 1) - i
+  const limit = offsetPoints.length - 1 // cutAlongPoints needs a slot to wrap around the last corner
+  for (let i = 0; i < limit; i++) {
+    const inverseI = limit - i
     if (innerPoints.includes(inverseI)) { continue }
     cuttingPlanes[inverseI] = cutAlongPoints(offsetPoints, i, winding, brickInfo)
   }
@@ -76,11 +90,30 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   return shapes
 }
 
+function cutAlongPoints (points, i, winding, brickInfo) {
+  const next = winding
+    ? i === 0
+        ? points[points.length - 1]
+        : points[i - 1]
+    : points[i + 1]
+  return cutWall(brickInfo, points[i], next, winding)
+}
+
+function cutWall (brickInfo, curr, next, translateY) {
+  return layOnLine(
+    [curr[0], curr[1], 0],
+    [next[0], next[1], 0],
+    translate([0, translateY ? brickInfo.brickWidth : 0, 0],
+      zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness) // height, depth, width
+    )
+  )
+}
+
 function layOnLine (p2, p1, geometry) {
   const deltaX = p2[0] - p1[0]
   const deltaY = p2[1] - p1[1]
   const deltaZ = p2[2] - p1[2]
-  const radialDistance = length(deltaX, deltaY, deltaZ)
+  const radialDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ)
   const inclinationAngle = Math.acos(deltaZ * radialDistance)
   const azimuthalAngle = Math.atan2(deltaY, deltaX)
   return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
@@ -90,14 +123,9 @@ function zeroedCuboid (length, width, height) {
   return cuboid({ size: [length, width, height], center: [-length / 2, -width / 2, -height / 2] })
 }
 
-function makeBrickInfo (brickWidth, brickHeight, mortarThickness) {
-  return {
-    brickWidth,
-    brickHeight,
-    brickLength: (2 * brickWidth) + mortarThickness,
-    mortarThickness
-  }
-}
+//
+// | geometry
+// v
 
 // see http://paulbourke.net/geometry/pointlineplane/
 function intersect ([x1, y1, x2, y2], [x3, y3, x4, y4], enforceSegments = false) {
@@ -124,7 +152,7 @@ function normal (v, offset) {
   return [-tmp[1], tmp[0]]
 }
 
-function findOffset (points, offset) {
+function traceOffset (points, offset) {
   const result = []
   for (let j = 0; j < points.length; j++) {
     let i = (j - 1)
@@ -155,33 +183,6 @@ function findOffset (points, offset) {
   }
 
   return result
-}
-
-function main () {
-  const shapes = []
-
-  const triangle = [[0, 0], [10, 10], [0, 10]]
-  const box = [[0, 0], [9.8, 0], [9.8, 9.8], [0, 9.8]]
-  const pentagon = [[12, 6], [6, 10], [0, 6], [0, 0], [12, 0]]
-  const mshape = [[12, 0], [12, 10], [7, 6], [3, 6], [0, 10], [0, 0]]
-  const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
-  const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
-
-  const brickInfo = makeBrickInfo(1.5, 0.75, 1.0 / 10.0)
-
-  const showMortarSlices = true
-  for (let i = 0; i < 2; i++) {
-    const winding = i % 2
-    const h = i * (brickInfo.brickHeight + brickInfo.mortarThickness) + brickInfo.mortarThickness
-    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, brickInfo, showMortarSlices)))
-  }
-
-  return rotate([-90, -90, 0], translate([50, 0, 0], shapes))
 }
 
 module.exports = { main }
