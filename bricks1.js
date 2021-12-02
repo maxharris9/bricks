@@ -100,9 +100,7 @@ function cutAlongPoints (points, i, winding, brickInfo) {
 }
 
 function cutWall (brickInfo, curr, next, translateY) {
-  return layOnLine(
-    [curr[0], curr[1], 0],
-    [next[0], next[1], 0],
+  return layOnLine(curr, next,
     translate([0, translateY ? brickInfo.brickWidth : 0, 0],
       zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness) // height, depth, width
     )
@@ -112,10 +110,9 @@ function cutWall (brickInfo, curr, next, translateY) {
 function layOnLine (p2, p1, geometry) {
   const deltaX = p2[0] - p1[0]
   const deltaY = p2[1] - p1[1]
-  const deltaZ = p2[2] - p1[2]
-  const radialDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ)
-  const inclinationAngle = Math.acos(deltaZ * radialDistance)
+  const inclinationAngle = Math.PI / 2
   const azimuthalAngle = Math.atan2(deltaY, deltaX)
+
   return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
 }
 
