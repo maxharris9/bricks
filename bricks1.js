@@ -42,26 +42,20 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
     }
   }
 
-  // first we preallocate a result array of 2 * n slots
-  // const result = []
-
   const offsetPoints = findOffset(points.slice().reverse(), -brickInfo.brickWidth)
-  const thing = extrudeLinear({ height: brickInfo.brickHeight }, polygon({ points: [points, offsetPoints] }))
-  // shapes.push(thing)
-
-  const cuttingPlanes = []
+  const cuttingPlanes = new Array(offsetPoints.length)
 
   // cut the last joint first
   const first = offsetPoints.length - 1
   const last = winding ? 0 : offsetPoints.length - 2
-  cuttingPlanes.push(cutWall(brickInfo, offsetPoints[first], offsetPoints[last], !winding))
+  cuttingPlanes[0] = cutWall(brickInfo, offsetPoints[first], offsetPoints[last], !winding)
 
   // then we visit the points inside the hull, and calculate the green cut lines by
   // intersecting the corresponding offset line with a line normal to the current line
   // segment
   for (let i = 0; i < points.length - 1; i++) {
     if (!innerPoints.find(item => item === i)) { continue }
-    cuttingPlanes.push(cutAlongPoints(points, i, winding, brickInfo))
+    cuttingPlanes[i] = cutAlongPoints(points, i, winding, brickInfo)
   }
 
   // then we visit the offset points in the opposite order finding all the red cut lines.
@@ -69,16 +63,16 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   for (let i = 0; i < offsetPoints.length - 1; i++) {
     const inverseI = (offsetPoints.length - 1) - i
     if (innerPoints.find(item => item === inverseI)) { continue }
-    cuttingPlanes.push(cutAlongPoints(offsetPoints, i, winding, brickInfo))
+    cuttingPlanes[inverseI] = cutAlongPoints(offsetPoints, i, winding, brickInfo)
   }
 
-  let scratchBlock = thing
+  let extrudedPolygon = extrudeLinear({ height: brickInfo.brickHeight }, polygon({ points: [points, offsetPoints] }))
   for (let k = 0; k < cuttingPlanes.length; k++) {
-    scratchBlock = subtract(scratchBlock, cuttingPlanes[k])
-    //     shapes.push(cuttingPlanes[k])
+    extrudedPolygon = subtract(extrudedPolygon, cuttingPlanes[k])
   }
 
-  shapes.push(scratchBlock)
+  shapes.push(extrudedPolygon)
+
   return shapes
 }
 
@@ -168,7 +162,7 @@ function main () {
 
   const triangle = [[0, 0], [10, 10], [0, 10]]
   const box = [[0, 0], [9.8, 0], [9.8, 9.8], [0, 9.8]]
-  const pentagon = [[12, 0], [0, 0], [0, 6], [6, 10], [12, 6]].reverse()
+  const pentagon = [[12, 6], [6, 10], [0, 6], [0, 0], [12, 0]]
   const mshape = [[12, 0], [12, 10], [7, 6], [3, 6], [0, 10], [0, 0]]
   const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
   const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
