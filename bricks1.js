@@ -23,15 +23,20 @@ function cutWall (shapes, brickInfo, curr, next, translateY) {
   shapes.push(mortarSlice)
 }
 
+function cutAlongPoints (points, i, winding, cuttingPlanes, brickInfo) {
+  const next = winding
+    ? i === 0 ? points[points.length - 1] : points[i - 1]
+    : points[i + 1]
+  cutWall(cuttingPlanes, brickInfo, points[i], next, winding)
+}
+
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const shapes = []
-  const len = points.length
-  console.log('points upon iterateEdges():', points)
 
   const convexPoints = hull(polygon({ points })).sides.map(item => item[0])
   const innerPoints = []
 
-  for (let index = 0; index < len; index++) {
+  for (let index = 0; index < points.length; index++) {
     const p = points[index]
     if (classifyPoint(convexPoints, p)) {
       innerPoints.push(index)
@@ -51,11 +56,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   // segment
   for (let i = 0; i < points.length - 1; i++) {
     if (!innerPoints.find(item => item === i)) { continue }
-
-    const next = winding
-      ? i === 0 ? points[points.length - 1] : points[i - 1]
-      : points[i + 1]
-    cutWall(cuttingPlanes, brickInfo, points[i], next, winding)
+    cutAlongPoints(points, i, winding, cuttingPlanes, brickInfo)
   }
 
   // then we visit the offset points in the opposite order finding all the red cut lines.
@@ -63,11 +64,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   for (let i = 0; i < offsetPoints.length - 1; i++) {
     const inverseI = (offsetPoints.length - 1) - i
     if (innerPoints.find(item => item === inverseI)) { continue }
-
-    const next = winding
-      ? i === 0 ? offsetPoints[offsetPoints.length - 1] : offsetPoints[i - 1]
-      : offsetPoints[i + 1]
-    cutWall(cuttingPlanes, brickInfo, offsetPoints[i], next, winding)
+    cutAlongPoints(offsetPoints, i, winding, cuttingPlanes, brickInfo)
   }
 
   let scratchBlock = thing
@@ -141,44 +138,62 @@ function makeBrickInfo (brickWidth, brickHeight, mortarThickness) {
   }
 }
 
-// https://stackoverflow.com/a/54241014/53140
+// see http://paulbourke.net/geometry/pointlineplane/
+function intersect ([x1, y1, x2, y2], [x3, y3, x4, y4], enforceSegments = false) {
+  // there is likely no intersection if either line is a point, so just bail
+  if ((x1 === x2 && y1 === y2) || (x3 === x4 && y3 === y4)) { return false }
+
+  const denominator = ((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1))
+
+  // ensure that the lines are not parallel
+  if (denominator === 0) { return false }
+
+  const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denominator
+  const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denominator
+
+  // is the intersection within the segment?
+  if (enforceSegments && (ua < 0 || ua > 1 || ub < 0 || ub > 1)) { return false }
+
+  return [x1 + ua * (x2 - x1), y1 + ua * (y2 - y1)]
+}
+
+function normal (v, offset) {
+  const mag = Math.sqrt(v[0] * v[0] + v[1] * v[1])
+  const tmp = [v[0] / mag * offset, v[1] / mag * offset]
+  return [-tmp[1], tmp[0]]
+}
+
 function findOffset (points, offset) {
-  const pts = points.map(point => ({ x: point[0], y: point[1] })) // TODO: remove
-  const newPoints = []
-  for (let j = 0; j < pts.length; j++) {
+  const result = []
+  for (let j = 0; j < points.length; j++) {
     let i = (j - 1)
-    if (i < 0) i += pts.length
-    const k = (j + 1) % pts.length
+    if (i < 0) { i += points.length }
+    const k = (j + 1) % points.length
 
-    let v1 = [pts[j].x - pts[i].x, pts[j].y - pts[i].y]
-    const mag1 = Math.sqrt(v1[0] * v1[0] + v1[1] * v1[1])
-    v1 = [v1[0] / mag1, v1[1] / mag1]
-    v1 = [v1[0] * offset, v1[1] * offset]
-    const n1 = [-v1[1], v1[0]]
-    const x1 = pts[i].x + n1[0]
-    const y1 = pts[i].y + n1[1]
-    const x2 = pts[j].x + n1[0]
-    const y2 = pts[j].y + n1[1]
+    const v1 = [points[j][0] - points[i][0], points[j][1] - points[i][1]]
+    const n1 = normal(v1, offset)
 
-    let v2 = [pts[k].x - pts[j].x, pts[k].y - pts[j].y]
-    const mag2 = Math.sqrt(v2[0] * v2[0] + v2[1] * v2[1])
-    v2 = [v2[0] / mag2, v2[1] / mag2]
-    v2 = [v2[0] * offset, v2[1] * offset]
-    const n2 = [-v2[1], v2[0]]
-    const x3 = pts[j].x + n2[0]
-    const y3 = pts[j].y + n2[1]
-    const x4 = pts[k].x + n2[0]
-    const y4 = pts[k].y + n2[1]
+    const line1 = [
+      points[i][0] + n1[0],
+      points[i][1] + n1[1],
+      points[j][0] + n1[0],
+      points[j][1] + n1[1]
+    ]
 
-    const den = ((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1))
-    const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / den
-    const x = x1 + ua * (x2 - x1)
-    const y = y1 + ua * (y2 - y1)
+    const v2 = [points[k][0] - points[j][0], points[k][1] - points[j][1]]
+    const n2 = normal(v2, offset)
 
-    newPoints.push([x, y])
+    const line2 = [
+      points[j][0] + n2[0],
+      points[j][1] + n2[1],
+      points[k][0] + n2[0],
+      points[k][1] + n2[1]
+    ]
+
+    result.push(intersect(line1, line2, false))
   }
 
-  return newPoints
+  return result
 }
 
 function main () {
