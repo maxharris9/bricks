@@ -15,7 +15,7 @@ function cutWall (shapes, brickInfo, curr, next, translateY) {
   const mortarSlice = layOnLine(
     [curr[0], curr[1], 0],
     [next[0], next[1], 0],
-    translate([0, translateY ? 1 : 0, 0],
+    translate([0, translateY ? brickInfo.brickWidth : 0, 0],
       zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness) // height, depth, width
     )
   )
@@ -25,7 +25,9 @@ function cutWall (shapes, brickInfo, curr, next, translateY) {
 
 function cutAlongPoints (points, i, winding, cuttingPlanes, brickInfo) {
   const next = winding
-    ? i === 0 ? points[points.length - 1] : points[i - 1]
+    ? i === 0
+        ? points[points.length - 1]
+        : points[i - 1]
     : points[i + 1]
   cutWall(cuttingPlanes, brickInfo, points[i], next, winding)
 }
@@ -37,8 +39,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const innerPoints = []
 
   for (let index = 0; index < points.length; index++) {
-    const p = points[index]
-    if (classifyPoint(convexPoints, p)) {
+    if (classifyPoint(convexPoints, points[index]) === -1) {
       innerPoints.push(index)
     }
   }
@@ -51,6 +52,12 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   // shapes.push(thing)
 
   const cuttingPlanes = []
+
+  // cut the last joint first
+  const first = offsetPoints.length - 1
+  const last = winding ? 0 : offsetPoints.length - 2
+  cutWall(cuttingPlanes, brickInfo, offsetPoints[first], offsetPoints[last], !winding)
+
   // then we visit the points inside the hull, and calculate the green cut lines by
   // intersecting the corresponding offset line with a line normal to the current line
   // segment
@@ -70,48 +77,10 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   let scratchBlock = thing
   for (let k = 0; k < cuttingPlanes.length; k++) {
     scratchBlock = subtract(scratchBlock, cuttingPlanes[k])
-    // shapes.push(cuttingPlanes[k])
+    //     shapes.push(cuttingPlanes[k])
   }
 
   shapes.push(scratchBlock)
-
-  //   console.log('points.length:', points.length, 'offsetPoints.length:', offsetPoints.length, 'innerPoints:', innerPoints)
-  //   console.log('points:', points, 'offsetPoints', offsetPoints)
-
-  // then we make one final pass over the combined loops, cutting out each block
-
-  //   for (let i = 0; i < len - 1; i++) {
-  //     const prev = (i === 0) ? points[len - 1] : points[i - 1]
-  //     const curr = (i === 0) ? points[0] : points[i]
-  //     const next = (i === 0) ? points[1] : points[i + 1]
-  //     const finl = (i === 0) ? points[2] : (i <= len - 3 ? points[i + 2] : points[0])
-  //
-  //     const edgeLength = length(next[0] - curr[0], next[1] - curr[1], 0)
-  //     const brickLimit = Math.ceil(edgeLength / (brickInfo.brickLength + brickInfo.mortarThickness))
-  //
-  //     const geometry = {
-  //       p0: line([prev, curr]),
-  //       c0: line([curr, next]),
-  //       n0: line([next, finl]),
-  //       winding,
-  //       currentPointInside: innerPoints.find(tmp => tmp === i),
-  //       nextPointInside: innerPoints.find(tmp => tmp === i + 1)
-  //     }
-  //     const blockOutline = traceBounds(geometry, brickInfo)
-  //     const block = extrudeLinear({ height: brickInfo.brickHeight }, polygon({ points: blockOutline }))
-  //
-  //     // blockOutline is always a quad of some kind, and we want to find the widest edge of it to guide our cuts:
-  //     //
-  //     //   0 /            \ 3
-  //     //    /              \
-  //     //   /                \
-  //     // 1 ------------------ 2
-  //
-  //     const angle = getAngle(blockOutline[0], blockOutline[1], blockOutline[2])
-  //     const p0 = blockOutline[angle > 90 ? 1 : 0].concat(0)
-  //     const p1 = blockOutline[angle > 90 ? 2 : 3].concat(0)
-  //   }
-
   return shapes
 }
 
@@ -201,13 +170,12 @@ function main () {
 
   const triangle = [[0, 0], [10, 10], [0, 10]]
   const box = [[0, 0], [9.8, 0], [9.8, 9.8], [0, 9.8]]
-  const backwards = [[0, 9.8], [9.8, 9.8], [9.8, 0], [0, 0]]
-  const pentagon = [[0, 0], [0, 6], [6, 10], [12, 6], [12, 0]]
+  const pentagon = [[12, 0], [0, 0], [0, 6], [6, 10], [12, 6]].reverse()
   const mshape = [[12, 0], [12, 10], [7, 6], [3, 6], [0, 10], [0, 0]]
   const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
   const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
 
-  const brickInfo = makeBrickInfo(1.0, 0.75, 1.0 / 10.0)
+  const brickInfo = makeBrickInfo(1.5, 0.75, 1.0 / 10.0)
 
   const showMortarSlices = true
   for (let i = 0; i < 2; i++) {
@@ -215,7 +183,6 @@ function main () {
     const h = i * (brickInfo.brickHeight + brickInfo.mortarThickness) + brickInfo.mortarThickness
     shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([-45, 20, h], iterateEdges(backwards, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
