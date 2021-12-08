@@ -62,33 +62,23 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const extrudedPolygon = extrudeLinear({ height: 0.1 }, polygon({ points: [points.slice(), offsetPoints.slice().reverse()] }))
 
   if (winding) {
-    for (let i = 1, ip = i + 1; i < points.length - 1; i += 2, ip += 2) {
-      const l = [offsetPoints[i], offsetPoints[ip]]
+    for (let i = 1, ip = i + 1; i < points.length; i += 2, ip += 2) {
+      const ipp = i === points.length - 1 ? 0 : ip
+
+      const l = [offsetPoints[i], offsetPoints[ipp]]
       const curr = innerPoints.includes(i) ? closestPoint(l, points[i]) : offsetPoints[i]
-      const next = innerPoints.includes(ip) ? closestPoint(l, points[ip]) : offsetPoints[ip]
+      const next = innerPoints.includes(ipp) ? closestPoint(l, points[ipp]) : offsetPoints[ipp]
       shapes.push([curr, next])
     }
-
-    const i = points.length - 1
-    const ip = 0
-    const l = [offsetPoints[i], offsetPoints[ip]]
-    const curr = innerPoints.includes(i) ? closestPoint(l, points[i]) : offsetPoints[i]
-    const next = innerPoints.includes(ip) ? closestPoint(l, points[ip]) : offsetPoints[ip]
-    shapes.push([curr, next])
   } else {
     for (let i = 0, ip = i + 1; i < points.length - 1; i += 2, ip += 2) {
-      const l = [points[i], points[ip]]
+      const ipp = i === points.length - 1 ? 0 : ip
+
+      const l = [points[i], points[ipp]]
       const curr = innerPoints.includes(i) ? points[i] : closestPoint(l, offsetPoints[i])
-      const next = innerPoints.includes(ip) ? points[ip] : closestPoint(l, offsetPoints[ip])
+      const next = innerPoints.includes(ipp) ? points[ipp] : closestPoint(l, offsetPoints[ipp])
       shapes.push([curr, next])
     }
-
-    const i = points.length - 1
-    const ip = 0
-    const l = [points[i], points[ip]]
-    const curr = innerPoints.includes(i) ? points[i] : closestPoint(l, offsetPoints[i])
-    const next = innerPoints.includes(ip) ? points[ip] : closestPoint(l, offsetPoints[ip])
-    shapes.push([curr, next])
   }
 
   // convert to 3D geometry that jscad can render into STL
