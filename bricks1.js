@@ -1,9 +1,10 @@
 const jscad = require('@jscad/modeling')
-const { polygon, cuboid } = jscad.primitives
+const { polygon, cuboid, sphere } = jscad.primitives
 const { translate, rotate } = jscad.transforms
 const { extrudeLinear } = jscad.extrusions
 const { subtract } = jscad.booleans
 const { hull } = jscad.hulls
+// const { line2 } = jscad.maths
 
 const classifyPoint = require('robust-point-in-polygon')
 
@@ -17,7 +18,7 @@ function main () {
   const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
   const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
 
-  const brickInfo = makeBrickInfo(1.5, 0.75, 1.0 / 10.0)
+  const brickInfo = makeBrickInfo(1.0, 0.75, 1.0 / 10.0)
 
   const showMortarSlices = true
   for (let i = 0; i < 2; i++) {
@@ -43,51 +44,57 @@ function makeBrickInfo (brickWidth, brickHeight, mortarThickness) {
   }
 }
 
+function zip (a, b) { return a.map((k, i) => [k, b[i]]) }
+
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const shapes = []
 
   const convexPoints = hull(polygon({ points })).sides.map(item => item[0])
-  const innerPoints = []
 
+  const innerPoints = []
   for (let index = 0; index < points.length; index++) {
     if (classifyPoint(convexPoints, points[index]) === -1) {
       innerPoints.push(index)
     }
   }
 
-  const offsetPoints = traceOffset(points.slice().reverse(), -brickInfo.brickWidth)
-  const cuttingPlanes = new Array(offsetPoints.length)
+  const offsetPoints = traceOffset(points.slice(), brickInfo.brickWidth)
+  const extrudedPolygon = extrudeLinear({ height: 0.1 }, polygon({ points: [points.slice(), offsetPoints.slice().reverse()] }))
 
-  // find the last joint first
-  const first = offsetPoints.length - 1
-  const last = winding ? 0 : offsetPoints.length - 2
-  cuttingPlanes[0] = cutWall(brickInfo, offsetPoints[first], offsetPoints[last], !winding)
+  if (winding) {
+    for (let i = 1, ip = i + 1; i < points.length - 1; i += 2, ip += 2) {
+      const l = [offsetPoints[i], offsetPoints[ip]]
+      const curr = innerPoints.includes(i) ? closestPoint(l, points[i]) : offsetPoints[i]
+      const next = innerPoints.includes(ip) ? closestPoint(l, points[ip]) : offsetPoints[ip]
+      shapes.push([curr, next])
+    }
 
-  // then we visit the points inside the hull, and calculate the green cut lines by
-  // intersecting the corresponding offset line with a line normal to the current line
-  // segment
-  for (let i = 0; i < innerPoints.length; i++) {
-    const innerIndex = innerPoints[i]
-    cuttingPlanes[innerIndex] = cutAlongPoints(points, innerIndex, winding, brickInfo)
+    const i = points.length - 1
+    const ip = 0
+    const l = [offsetPoints[i], offsetPoints[ip]]
+    const curr = innerPoints.includes(i) ? closestPoint(l, points[i]) : offsetPoints[i]
+    const next = innerPoints.includes(ip) ? closestPoint(l, points[ip]) : offsetPoints[ip]
+    shapes.push([curr, next])
+  } else {
+    for (let i = 0, ip = i + 1; i < points.length - 1; i += 2, ip += 2) {
+      const l = [points[i], points[ip]]
+      const curr = innerPoints.includes(i) ? points[i] : closestPoint(l, offsetPoints[i])
+      const next = innerPoints.includes(ip) ? points[ip] : closestPoint(l, offsetPoints[ip])
+      shapes.push([curr, next])
+    }
+
+    const i = points.length - 1
+    const ip = 0
+    const l = [points[i], points[ip]]
+    const curr = innerPoints.includes(i) ? points[i] : closestPoint(l, offsetPoints[i])
+    const next = innerPoints.includes(ip) ? points[ip] : closestPoint(l, offsetPoints[ip])
+    shapes.push([curr, next])
   }
 
-  // then we visit the offset points in the opposite order finding all the red cut lines.
-  // each cut line is placed in its slot in order
-  const limit = offsetPoints.length - 1 // cutAlongPoints needs a slot to wrap around the last corner
-  for (let i = 0; i < limit; i++) {
-    const inverseI = limit - i
-    if (innerPoints.includes(inverseI)) { continue }
-    cuttingPlanes[inverseI] = cutAlongPoints(offsetPoints, i, winding, brickInfo)
-  }
-
-  let extrudedPolygon = extrudeLinear({ height: brickInfo.brickHeight }, polygon({ points: [points, offsetPoints] }))
-  for (let k = 0; k < cuttingPlanes.length; k++) {
-    extrudedPolygon = subtract(extrudedPolygon, cuttingPlanes[k])
-  }
-
-  shapes.push(extrudedPolygon)
-
-  return shapes
+  // convert to 3D geometry that jscad can render into STL
+  return shapes.map(cp => {
+    return [sphere({ center: cp[0].concat(0), radius: 0.25 }), sphere({ center: cp[1].concat(0), radius: 0.25 })]
+  }).concat(extrudedPolygon)
 }
 
 function cutAlongPoints (points, i, winding, brickInfo) {
@@ -100,11 +107,15 @@ function cutAlongPoints (points, i, winding, brickInfo) {
 }
 
 function cutWall (brickInfo, curr, next, translateY) {
-  return layOnLine(curr, next,
-    translate([0, translateY ? brickInfo.brickWidth : 0, 0],
-      zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness) // height, depth, width
-    )
-  )
+  const v = jscad.maths.vec2.subtract([], next, curr)
+  const normalLine = jscad.maths.vec2.scale([], jscad.maths.vec2.normal([], v), brickInfo.brickWidth)
+  const result = [curr, [curr[0] + normalLine[0], curr[1] + normalLine[1]]]
+  return result
+//   return layOnLine(curr, next,
+//     translate([0, translateY ? brickInfo.brickWidth : 0],
+//       zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness) // height, depth, width
+//     )
+//   )
 }
 
 function layOnLine (p2, p1, geometry) {
@@ -180,6 +191,34 @@ function traceOffset (points, offset) {
   }
 
   return result
+}
+
+const EPS = 0.000001 // smallest positive value: less than that to be considered zero
+const EPS_SQ = EPS * EPS
+
+function sqLineMagnitude (x1, y1, x2, y2) {
+  return (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)
+}
+
+function closestPoint ([[x1, y1], [x2, y2]], [px, py]) {
+  const sqLineMag = sqLineMagnitude(x1, y1, x2, y2)
+  if (sqLineMag < EPS_SQ) {
+    return -1
+  }
+
+  const u = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / sqLineMag
+
+  if ((u < EPS) || (u > 1)) { // closest point does not fall within the line segment, take the shorter distance to an endpoint
+    return [
+      sqLineMagnitude(px, py, x1, y1),
+      sqLineMagnitude(px, py, x2, y2)
+    ]
+  } else { // if (u < EPS) || (u > 1) // intersecting point is on the line, use the formula
+    return [
+      x1 + u * (x2 - x1),
+      y1 + u * (y2 - y1)
+    ]
+  } // else !(u < EPS) || !(u > 1)
 }
 
 module.exports = { main }
