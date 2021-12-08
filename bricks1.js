@@ -1,10 +1,8 @@
 const jscad = require('@jscad/modeling')
-const { polygon, cuboid, sphere } = jscad.primitives
-const { translate, rotate } = jscad.transforms
+const { polygon, sphere } = jscad.primitives
+const { translate } = jscad.transforms
 const { extrudeLinear } = jscad.extrusions
-const { subtract } = jscad.booleans
 const { hull } = jscad.hulls
-// const { line2 } = jscad.maths
 
 const classifyPoint = require('robust-point-in-polygon')
 
@@ -44,8 +42,6 @@ function makeBrickInfo (brickWidth, brickHeight, mortarThickness) {
   }
 }
 
-function zip (a, b) { return a.map((k, i) => [k, b[i]]) }
-
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const shapes = []
 
@@ -82,43 +78,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   }
 
   // convert to 3D geometry that jscad can render into STL
-  return shapes.map(cp => {
-    return [sphere({ center: cp[0].concat(0), radius: 0.25 }), sphere({ center: cp[1].concat(0), radius: 0.25 })]
-  }).concat(extrudedPolygon)
-}
-
-function cutAlongPoints (points, i, winding, brickInfo) {
-  const next = winding
-    ? i === 0
-        ? points[points.length - 1]
-        : points[i - 1]
-    : points[i + 1]
-  return cutWall(brickInfo, points[i], next, winding)
-}
-
-function cutWall (brickInfo, curr, next, translateY) {
-  const v = jscad.maths.vec2.subtract([], next, curr)
-  const normalLine = jscad.maths.vec2.scale([], jscad.maths.vec2.normal([], v), brickInfo.brickWidth)
-  const result = [curr, [curr[0] + normalLine[0], curr[1] + normalLine[1]]]
-  return result
-//   return layOnLine(curr, next,
-//     translate([0, translateY ? brickInfo.brickWidth : 0],
-//       zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness) // height, depth, width
-//     )
-//   )
-}
-
-function layOnLine (p2, p1, geometry) {
-  const deltaX = p2[0] - p1[0]
-  const deltaY = p2[1] - p1[1]
-  const inclinationAngle = Math.PI / 2
-  const azimuthalAngle = Math.atan2(deltaY, deltaX)
-
-  return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
-}
-
-function zeroedCuboid (length, width, height) {
-  return cuboid({ size: [length, width, height], center: [-length / 2, -width / 2, -height / 2] })
+  return shapes.map(side => side.map(cp => sphere({ center: cp.concat(0), radius: 0.25 }))).concat(extrudedPolygon)
 }
 
 //
