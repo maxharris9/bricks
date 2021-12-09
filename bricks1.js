@@ -22,15 +22,22 @@ function main () {
   for (let i = 0; i < 2; i++) {
     const winding = i % 2
     const h = i * (brickInfo.brickHeight + brickInfo.mortarThickness) + brickInfo.mortarThickness
-    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
+    //     shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
+    //     shapes.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
+    //     shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
+    //     shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, brickInfo, showMortarSlices)))
   }
 
   return shapes // rotate([-90, -90, 0], translate([50, 0, 0], shapes))
+}
+
+function len (curr, next) {
+  const deltaX = next[0] - curr[0]
+  const deltaY = next[1] - curr[1]
+
+  return Math.sqrt(deltaX * deltaX + deltaY * deltaY)
 }
 
 function makeBrickInfo (brickWidth, brickHeight, mortarThickness) {
@@ -40,6 +47,53 @@ function makeBrickInfo (brickWidth, brickHeight, mortarThickness) {
     brickLength: (2 * brickWidth) + mortarThickness,
     mortarThickness
   }
+}
+
+function midPoint (curr, next) {
+  const midX = ((next[0] - curr[0]) / 2) + curr[0]
+  const midY = ((next[1] - curr[1]) / 2) + curr[1]
+
+  return [midX, midY]
+}
+
+function emitCutPoints (curr, next, brickInfo, isLast) {
+  const result = []
+  const length = len(curr, next)
+  console.log('length:', length)
+  if (length <= brickInfo.brickLength) {
+    return result
+  }
+
+  // return [midPoint(curr, next)]
+
+  const halfway = length / 2
+
+  const [x1, y1] = isLast ? curr : next
+  const [x2, y2] = isLast ? next : curr
+
+  const a = x2 - x1
+  const b = y2 - y1
+
+  const slope = b / a
+  const angle = Math.atan(slope)
+
+  if (halfway > brickInfo.brickLength) {
+    const steps = Math.floor(halfway / brickInfo.brickLength)
+
+    for (let i = 0; i < steps + 1; i++) {
+      const x = i * brickInfo.brickLength * Math.cos(angle)
+      const y = i * brickInfo.brickLength * Math.sin(angle)
+      result.push([x + x1, y + y1])
+    }
+
+    for (let i = 0; i < steps + 1; i++) {
+      const x = i * brickInfo.brickLength * Math.cos(angle)
+      const y = i * brickInfo.brickLength * Math.sin(angle)
+      result.push([x2 - x, y2 - y])
+    }
+  }
+
+  return result
 }
 
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
@@ -64,7 +118,9 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
       const l = [offsetPoints[i], offsetPoints[ipp]]
       const curr = innerPoints.includes(i) ? closestPoint(l, points[i]) : offsetPoints[i]
       const next = innerPoints.includes(ipp) ? closestPoint(l, points[ipp]) : offsetPoints[ipp]
-      shapes.push([curr, next])
+
+      const isLast = i === points.length - 1
+      shapes.push([curr, ...emitCutPoints(next, curr, brickInfo, isLast), next])
     }
   } else {
     for (let i = 0, ip = i + 1; i < points.length - 1; i += 2, ip += 2) {
@@ -73,12 +129,14 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
       const l = [points[i], points[ipp]]
       const curr = innerPoints.includes(i) ? points[i] : closestPoint(l, offsetPoints[i])
       const next = innerPoints.includes(ipp) ? points[ipp] : closestPoint(l, offsetPoints[ipp])
-      shapes.push([curr, next])
+
+      const isLast = i === points.length - 2
+      shapes.push([curr, ...emitCutPoints(next, curr, brickInfo, isLast), next])
     }
   }
 
   // convert to 3D geometry that jscad can render into STL
-  return shapes.map(side => side.map(cp => sphere({ center: cp.concat(0), radius: 0.25 }))).concat(extrudedPolygon)
+  return shapes.map(side => side.filter(cp => !!cp).map(cp => sphere({ center: cp.concat(0), radius: 0.25 }))).concat(extrudedPolygon)
 }
 
 //
