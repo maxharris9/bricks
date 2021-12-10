@@ -112,6 +112,40 @@ function emitCutPoints (curr, next, brickInfo, isLast) {
   return result
 }
 
+function traceOddWalls (points, offsetPoints, innerPoints, brickInfo) {
+  const shapes = []
+
+  for (let i = 1, ip = i + 1; i < points.length; i += 2, ip += 2) {
+    const ipp = i === points.length - 1 ? 0 : ip
+
+    const l = [offsetPoints[i], offsetPoints[ipp]]
+    const curr = innerPoints.includes(i) ? closestPoint(l, points[i]) : offsetPoints[i]
+    const next = innerPoints.includes(ipp) ? closestPoint(l, points[ipp]) : offsetPoints[ipp]
+
+    const isLast = i === points.length - 1
+    shapes.push([curr, ...emitCutPoints(next, curr, brickInfo, isLast), next])
+  }
+
+  return shapes
+}
+
+function traceEvenWalls (points, offsetPoints, innerPoints, brickInfo) {
+  const shapes = []
+
+  for (let i = 0, ip = i + 1; i < points.length - 1; i += 2, ip += 2) {
+    const ipp = i === points.length - 1 ? 0 : ip
+
+    const l = [points[i], points[ipp]]
+    const curr = innerPoints.includes(i) ? points[i] : closestPoint(l, offsetPoints[i])
+    const next = innerPoints.includes(ipp) ? points[ipp] : closestPoint(l, offsetPoints[ipp])
+
+    const isLast = i === points.length - 2
+    shapes.push([curr, ...emitCutPoints(next, curr, brickInfo, isLast), next])
+  }
+
+  return shapes
+}
+
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const shapes = []
 
@@ -128,27 +162,9 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const extrudedPolygon = extrudeLinear({ height: 0.1 }, polygon({ points: [points.slice(), offsetPoints.slice().reverse()] }))
 
   if (winding) {
-    for (let i = 1, ip = i + 1; i < points.length; i += 2, ip += 2) {
-      const ipp = i === points.length - 1 ? 0 : ip
-
-      const l = [offsetPoints[i], offsetPoints[ipp]]
-      const curr = innerPoints.includes(i) ? closestPoint(l, points[i]) : offsetPoints[i]
-      const next = innerPoints.includes(ipp) ? closestPoint(l, points[ipp]) : offsetPoints[ipp]
-
-      const isLast = i === points.length - 1
-      shapes.push([curr, ...emitCutPoints(next, curr, brickInfo, isLast), next])
-    }
+    shapes.push(...traceOddWalls(points, offsetPoints, innerPoints, brickInfo))
   } else {
-    for (let i = 0, ip = i + 1; i < points.length - 1; i += 2, ip += 2) {
-      const ipp = i === points.length - 1 ? 0 : ip
-
-      const l = [points[i], points[ipp]]
-      const curr = innerPoints.includes(i) ? points[i] : closestPoint(l, offsetPoints[i])
-      const next = innerPoints.includes(ipp) ? points[ipp] : closestPoint(l, offsetPoints[ipp])
-
-      const isLast = i === points.length - 2
-      shapes.push([curr, ...emitCutPoints(next, curr, brickInfo, isLast), next])
-    }
+    shapes.push(...traceEvenWalls(points, offsetPoints, innerPoints, brickInfo))
   }
 
   // convert to 3D geometry that jscad can render into STL
