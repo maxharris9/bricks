@@ -97,7 +97,7 @@ function emitCutPoints (curr, next, brickInfo, isLast) {
     result.push(mid)
   }
 
-  for (let i = 0; i < steps + 1; i++) {
+  for (let i = steps; i > -1; i--) {
     if (i === steps && !addMidPoint) { // we're on the last cut on this half of the edge
       const xp = mid[0] + ((brickInfo.brickWidth / 2) * Math.cos(angle))
       const yp = mid[1] + ((brickInfo.brickWidth / 2) * Math.sin(angle))
@@ -123,7 +123,7 @@ function traceOddWalls (points, offsetPoints, innerPoints, brickInfo) {
     const next = innerPoints.includes(ipp) ? closestPoint(l, points[ipp]) : offsetPoints[ipp]
 
     const isLast = i === points.length - 1
-    shapes.push([curr, ...emitCutPoints(next, curr, brickInfo, isLast), next])
+    shapes.push(emitCutPoints(next, curr, brickInfo, isLast))
   }
 
   return shapes
@@ -140,10 +140,27 @@ function traceEvenWalls (points, offsetPoints, innerPoints, brickInfo) {
     const next = innerPoints.includes(ipp) ? points[ipp] : closestPoint(l, offsetPoints[ipp])
 
     const isLast = i === points.length - 2
-    shapes.push([curr, ...emitCutPoints(next, curr, brickInfo, isLast), next])
+    shapes.push(emitCutPoints(next, curr, brickInfo, isLast))
   }
 
   return shapes
+}
+
+function traceBetween (walls) {
+  const result = []
+
+  for (let i = 0; i < walls.length; i++) {
+    const points = walls[i]
+    const shapes = []
+    for (let j = 0; j < points.length - 1; j++) {
+      const curr = points[j]
+      const next = points[j + 1]
+      shapes.push(midPoint(curr, next))
+    }
+    result.push(shapes)
+  }
+
+  return result
 }
 
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
@@ -163,8 +180,10 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
 
   if (winding) {
     shapes.push(...traceOddWalls(points, offsetPoints, innerPoints, brickInfo))
+    shapes.push(...traceBetween(traceEvenWalls(points, offsetPoints, innerPoints, brickInfo)))
   } else {
     shapes.push(...traceEvenWalls(points, offsetPoints, innerPoints, brickInfo))
+    shapes.push(...traceBetween(traceOddWalls(points, offsetPoints, innerPoints, brickInfo)))
   }
 
   // convert to 3D geometry that jscad can render into STL
