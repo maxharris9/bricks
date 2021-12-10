@@ -78,13 +78,14 @@ function emitCutPoints (curr, next, brickInfo, isLast) {
   const mid = midPoint(curr, next)
 
   const steps = Math.floor(halfway / brickInfo.brickLength)
+  const keystoneWidth = brickInfo.brickWidth
 
   const remainder = halfway - (steps * brickInfo.brickLength)
   const addMidPoint = (remainder > (brickInfo.brickLength / 2))
   for (let i = 0; i < steps + 1; i++) {
     if (i === steps && !addMidPoint) { // we're on the last cut on this half of the edge
-      const xp = mid[0] - ((brickInfo.brickWidth / 2) * Math.cos(angle))
-      const yp = mid[1] - ((brickInfo.brickWidth / 2) * Math.sin(angle))
+      const xp = mid[0] - (keystoneWidth * Math.cos(angle))
+      const yp = mid[1] - (keystoneWidth * Math.sin(angle))
       result.push([xp, yp])
     } else {
       const x = i * brickInfo.brickLength * Math.cos(angle)
@@ -99,8 +100,8 @@ function emitCutPoints (curr, next, brickInfo, isLast) {
 
   for (let i = steps; i > -1; i--) {
     if (i === steps && !addMidPoint) { // we're on the last cut on this half of the edge
-      const xp = mid[0] + ((brickInfo.brickWidth / 2) * Math.cos(angle))
-      const yp = mid[1] + ((brickInfo.brickWidth / 2) * Math.sin(angle))
+      const xp = mid[0] + (keystoneWidth * Math.cos(angle))
+      const yp = mid[1] + (keystoneWidth * Math.sin(angle))
       result.push([xp, yp])
     } else {
       const x = i * brickInfo.brickLength * Math.cos(angle)
