@@ -116,15 +116,15 @@ function emitCutPoints (curr, next, brickInfo, isLast) {
 function traceOddWalls (points, offsetPoints, innerPoints, brickInfo) {
   const shapes = []
 
+  const lastIndex = points.length - 1
   for (let i = 1, ip = i + 1; i < points.length; i += 2, ip += 2) {
     const ipp = i === points.length - 1 ? 0 : ip
 
-    const l = [offsetPoints[i], offsetPoints[ipp]]
-    const curr = innerPoints.includes(i) ? closestPoint(l, points[i]) : offsetPoints[i]
-    const next = innerPoints.includes(ipp) ? closestPoint(l, points[ipp]) : offsetPoints[ipp]
+    const l = [points[i], points[ipp]]
+    const curr = innerPoints.includes(i) ? points[i] : closestPoint(l, offsetPoints[i])
+    const next = innerPoints.includes(ipp) ? points[ipp] : closestPoint(l, offsetPoints[ipp])
 
-    const isLast = i === points.length - 1
-    shapes.push(emitCutPoints(next, curr, brickInfo, isLast))
+    shapes.push(emitCutPoints(next, curr, brickInfo, i === lastIndex))
   }
 
   return shapes
@@ -133,6 +133,7 @@ function traceOddWalls (points, offsetPoints, innerPoints, brickInfo) {
 function traceEvenWalls (points, offsetPoints, innerPoints, brickInfo) {
   const shapes = []
 
+  const lastIndex = points.length - 2
   for (let i = 0, ip = i + 1; i < points.length - 1; i += 2, ip += 2) {
     const ipp = i === points.length - 1 ? 0 : ip
 
@@ -140,8 +141,7 @@ function traceEvenWalls (points, offsetPoints, innerPoints, brickInfo) {
     const curr = innerPoints.includes(i) ? points[i] : closestPoint(l, offsetPoints[i])
     const next = innerPoints.includes(ipp) ? points[ipp] : closestPoint(l, offsetPoints[ipp])
 
-    const isLast = i === points.length - 2
-    shapes.push(emitCutPoints(next, curr, brickInfo, isLast))
+    shapes.push(emitCutPoints(next, curr, brickInfo, i === lastIndex))
   }
 
   return shapes
@@ -188,7 +188,10 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   }
 
   // convert to 3D geometry that jscad can render into STL
-  return shapes.map(side => side.filter(cp => !!cp).map(cp => sphere({ center: cp.concat(0), segments: 4, radius: 0.25 }))).concat(extrudedPolygon)
+  return shapes
+    .map(side => side.filter(cp => !!cp)
+      .map(cp => sphere({ center: cp.concat(0), segments: 4, radius: 0.125 })))
+    .concat(extrudedPolygon)
 }
 
 //
