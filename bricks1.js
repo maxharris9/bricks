@@ -1,5 +1,5 @@
 const jscad = require('@jscad/modeling')
-const { polygon, sphere, cuboid } = jscad.primitives
+const { polygon, cuboid } = jscad.primitives
 const { translate, rotate } = jscad.transforms
 const { extrudeLinear } = jscad.extrusions
 const { subtract } = jscad.booleans
@@ -28,7 +28,7 @@ function main () {
   ]
   // const complex3 = [[0, 0], [11, 0], [19, -8], [25, -8], [25, -15], [37, -15], [37, 12], [0, 12]]
 
-  const brickInfo = makeBrickInfo(1.0 * 1, 0.75 * 1, 1.0 / 10.0 * 1)
+  const brickInfo = makeBrickInfo(1.0 * 1, 0.75 * 1, 1.0 / 20.0 * 1)
 
   const showMortarSlices = true
   for (let i = 0; i < 2; i++) {
@@ -69,14 +69,6 @@ function midPoint (curr, next) {
   return [midX, midY]
 }
 
-function calcAngle (x1, y1, x2, y2) {
-  const a = x2 - x1
-  const b = y2 - y1
-
-  const slope = b / a
-  return Math.atan(slope)
-}
-
 function emitCutPoints (curr, next, brickInfo) {
   const result = []
   const length = len(curr, next)
@@ -90,8 +82,6 @@ function emitCutPoints (curr, next, brickInfo) {
   const [x1, y1] = next
   const [x2, y2] = curr
 
-  const angle = calcAngle(x1, y1, x2, y2)
-
   const mid = midPoint(curr, next)
 
   const steps = Math.floor(halfway / brickInfo.brickLength)
@@ -100,15 +90,17 @@ function emitCutPoints (curr, next, brickInfo) {
   const remainder = halfway - (steps * brickInfo.brickLength)
   const addMidPoint = (remainder > (brickInfo.brickLength / 2))
 
+  const n = normalize([x2 - x1, y2 - y1]) // [xf - xi, yf - yi]
+
   for (let i = 0; i < steps + 1; i++) {
     if (i === steps && !addMidPoint) { // we're on the last cut on this half of the edge
-      const xp = mid[0] - (keystoneWidth * Math.cos(angle)) // THIS IS BROKEN. CAN'T DO THIS AROUND THE POLY
-      const yp = mid[1] - (keystoneWidth * Math.sin(angle))
+      const xp = mid[0] - (keystoneWidth * n[0])
+      const yp = mid[1] - (keystoneWidth * n[1])
       result.push([xp, yp])
     } else {
       const delta = i * (brickInfo.brickLength + brickInfo.mortarThickness)
-      const xp = delta * Math.cos(angle)
-      const yp = delta * Math.sin(angle)
+      const xp = delta * n[0]
+      const yp = delta * n[1]
       result.push([xp + x1, yp + y1])
     }
   }
@@ -119,13 +111,13 @@ function emitCutPoints (curr, next, brickInfo) {
 
   for (let i = steps; i > -1; i--) {
     if (i === steps && !addMidPoint) { // we're on the last cut on this half of the edge
-      const xp = mid[0] + (keystoneWidth * Math.cos(angle))
-      const yp = mid[1] + (keystoneWidth * Math.sin(angle))
+      const xp = mid[0] + (keystoneWidth * n[0])
+      const yp = mid[1] + (keystoneWidth * n[1])
       result.push([xp, yp])
     } else {
       const delta = i * (brickInfo.brickLength + brickInfo.mortarThickness)
-      const x = delta * Math.cos(angle)
-      const y = delta * Math.sin(angle)
+      const x = delta * n[0]
+      const y = delta * n[1]
       result.push([x2 - x, y2 - y])
     }
   }
@@ -159,7 +151,7 @@ function layOnLine (p2, p1, geometry) {
 
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const offsetPoints = traceOffset(points.slice(), brickInfo.brickWidth)
-  const extrudedPolygon = extrudeLinear({ height: -0.1 /* brickInfo.brickHeight */ }, polygon({ points: [points.slice(), offsetPoints.slice().reverse()] }))
+  const extrudedPolygon = extrudeLinear({ height: brickInfo.brickHeight }, polygon({ points: [points.slice(), offsetPoints.slice().reverse()] }))
 
   const shapes = doIt(points, offsetPoints)
 
@@ -177,25 +169,23 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
     const [xi, yi] = p[0]
     const [xf, yf] = p[p.length - 1]
 
-    const points = p // winding ? emitCutPoints([xf, yf], [xi, yi], brickInfo) : p // emitCutPoints([xf, yf], [xi, yi], brickInfo)
+    const points = winding ? emitCutPoints([xf, yf], [xi, yi], brickInfo) : traceBetween(emitCutPoints([xf, yf], [xi, yi], brickInfo))
 
     for (let j = 0; j < points.length / 2; j++) {
       const [x1, y1] = points[j]
       const n = normalize([xf - xi, yf - yi])
-
       result.push(layOnLine(points[j], [x1 + n[0], y1 + n[1]], zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness)))
     }
 
     for (let j = points.length - 1; j >= points.length / 2; j--) {
       const [x1, y1] = points[j]
       const n = normalize([xf - xi, yf - yi])
-
       result.push(layOnLine(points[j], [x1 - n[1], y1 + n[0]], zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, brickInfo.brickWidth)))
     }
   }
 
-  // return subtract(extrudedPolygon, result)
-  return result.concat(extrudedPolygon)
+  return subtract(extrudedPolygon, result)
+//   return result.concat(extrudedPolygon)
 }
 
 //
