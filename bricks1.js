@@ -1,10 +1,8 @@
 const jscad = require('@jscad/modeling')
-const { polygon, sphere } = jscad.primitives
-const { translate } = jscad.transforms
+const { polygon, sphere, cuboid } = jscad.primitives
+const { translate, rotate } = jscad.transforms
 const { extrudeLinear } = jscad.extrusions
-const { hull } = jscad.hulls
-
-const classifyPoint = require('robust-point-in-polygon')
+const { subtract } = jscad.booleans
 
 function main () {
   const shapes = []
@@ -12,11 +10,25 @@ function main () {
   const triangle = [[0, 0], [10, 10], [0, 10]]
   const box = [[0, 0], [9.8, 0], [9.8, 9.8], [0, 9.8]]
   const pentagon = [[12, 6], [6, 10], [0, 6], [0, 0], [12, 0]]
-  // const mshape = [[12, 0], [12, 10], [7, 6], [3, 6], [0, 10], [0, 0]]
+  const mshape = [[12, 0], [12, 10], [7, 6], [3, 6], [0, 10], [0, 0]]
   const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
   const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
+  const complex3 = [
+    [0, 0],
+    [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0],
+    [29.6, 0],
+    [29.6, 12.0],
+    [20, 20],
+    [20, 15],
+    [10, 12.0],
+    [10, 6.2],
+    [5, 6.2],
+    [5, 12.0],
+    [0, 12.0]
+  ]
+  // const complex3 = [[0, 0], [11, 0], [19, -8], [25, -8], [25, -15], [37, -15], [37, 12], [0, 12]]
 
-  const brickInfo = makeBrickInfo(1.0, 0.75, 1.0 / 20.0)
+  const brickInfo = makeBrickInfo(1.0 * 1, 0.75 * 1, 1.0 / 10.0 * 1)
 
   const showMortarSlices = true
   for (let i = 0; i < 2; i++) {
@@ -25,12 +37,13 @@ function main () {
     shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
-    // shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, brickInfo, showMortarSlices)))
+    shapes.push(translate([60, 0, h], iterateEdges(complex3, winding, brickInfo, showMortarSlices)))
   }
 
-  return shapes // rotate([-90, -90, 0], translate([50, 0, 0], shapes))
+  return rotate([Math.PI / 2, 0, 0], translate([50, 0, 0], shapes))
 }
 
 function len (curr, next) {
@@ -54,42 +67,6 @@ function midPoint (curr, next) {
   const midY = ((next[1] - curr[1]) / 2) + curr[1]
 
   return [midX, midY]
-}
-
-function addSecondSlice (walls, brickInfo) {
-  const result = []
-
-  for (let i = 0; i < walls.length; i++) {
-    const points = walls[i]
-    const shapes = []
-
-    const [xi, yi] = points[0]
-    const [xf, yf] = points[points.length - 1]
-
-    const angle = calcAngle(xi, yi, xf, yf)
-
-    for (let j = 0; j < points.length / 2; j++) {
-      const [x1, y1] = points[j]
-      shapes.push([x1, y1])
-
-      const x = brickInfo.mortarThickness * Math.cos(angle)
-      const y = brickInfo.mortarThickness * Math.sin(angle)
-      shapes.push([x1 + x, y1 + y])
-    }
-
-    for (let j = points.length - 1; j >= points.length / 2; j--) {
-      const [x1, y1] = points[j]
-      shapes.push([x1, y1])
-
-      const x = brickInfo.mortarThickness * Math.cos(angle)
-      const y = brickInfo.mortarThickness * Math.sin(angle)
-      shapes.push([x1 - x, y1 - y])
-    }
-
-    result.push(shapes)
-  }
-
-  return result
 }
 
 function calcAngle (x1, y1, x2, y2) {
@@ -125,7 +102,7 @@ function emitCutPoints (curr, next, brickInfo) {
 
   for (let i = 0; i < steps + 1; i++) {
     if (i === steps && !addMidPoint) { // we're on the last cut on this half of the edge
-      const xp = mid[0] - (keystoneWidth * Math.cos(angle))
+      const xp = mid[0] - (keystoneWidth * Math.cos(angle)) // THIS IS BROKEN. CAN'T DO THIS AROUND THE POLY
       const yp = mid[1] - (keystoneWidth * Math.sin(angle))
       result.push([xp, yp])
     } else {
@@ -156,73 +133,69 @@ function emitCutPoints (curr, next, brickInfo) {
   return result
 }
 
-function traceWalls (points, offsetPoints, innerPoints, brickInfo, opt) {
-  const shapes = []
-
-  const lastIndex = points.length - (2 - opt)
-  for (let i = opt, ip = i + 1; i < points.length - 1 + opt; i += 2, ip += 2) {
-    const ipp = i === points.length - 1 ? 0 : ip
-
-    const l = [points[i], points[ipp]]
-    const curr = innerPoints.includes(i) ? points[i] : closestPoint(l, offsetPoints[i])
-    const next = innerPoints.includes(ipp) ? points[ipp] : closestPoint(l, offsetPoints[ipp])
-
-    shapes.push(
-      i === lastIndex
-        ? emitCutPoints(curr, next, brickInfo)
-        : emitCutPoints(next, curr, brickInfo)
-    )
-  }
-
-  return shapes
-}
-
-function traceBetween (walls) {
+function traceBetween (points) {
   const result = []
-
-  for (let i = 0; i < walls.length; i++) {
-    const points = walls[i]
-    const shapes = []
-    for (let j = 0; j < points.length - 1; j++) {
-      const curr = points[j]
-      const next = points[j + 1]
-      shapes.push(midPoint(curr, next))
-    }
-    result.push(shapes)
+  for (let j = 0; j < points.length - 1; j++) {
+    const curr = points[j]
+    const next = points[j + 1]
+    result.push(midPoint(curr, next))
   }
 
   return result
 }
 
+function zeroedCuboid (length, width, height) {
+  return cuboid({ size: [length, width, height], center: [-length / 2, -width / 2, -height / 2] })
+}
+
+function layOnLine (p2, p1, geometry) {
+  const deltaX = p2[0] - p1[0]
+  const deltaY = p2[1] - p1[1]
+  const inclinationAngle = Math.PI / 2
+  const azimuthalAngle = Math.atan2(deltaY, deltaX)
+
+  return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
+}
+
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
-  const shapes = []
+  const offsetPoints = traceOffset(points.slice(), brickInfo.brickWidth)
+  const extrudedPolygon = extrudeLinear({ height: -0.1 /* brickInfo.brickHeight */ }, polygon({ points: [points.slice(), offsetPoints.slice().reverse()] }))
 
-  const convexPoints = hull(polygon({ points })).sides.map(item => item[0])
+  const shapes = doIt(points, offsetPoints)
 
-  const innerPoints = []
-  for (let index = 0; index < points.length; index++) {
-    if (classifyPoint(convexPoints, points[index]) === -1) {
-      innerPoints.push(index)
+  //   return shapes
+  //     .map(side => side.filter(cp => !!cp)
+  //       .map((cp, i) => sphere({ center: [cp[0], cp[1], 0], segments: 4, radius: (0 + 1) * 0.25 }))
+  //     )
+  //     .concat(extrudedPolygon)
+
+  // convert to 3D geometry that jscad can render into STL
+  const result = []
+  for (let i = winding ? 0 : 1; i < shapes.length - (winding ? 0 : 1); i += 2) {
+    const p = shapes[i]
+
+    const [xi, yi] = p[0]
+    const [xf, yf] = p[p.length - 1]
+
+    const points = p // winding ? emitCutPoints([xf, yf], [xi, yi], brickInfo) : p // emitCutPoints([xf, yf], [xi, yi], brickInfo)
+
+    for (let j = 0; j < points.length / 2; j++) {
+      const [x1, y1] = points[j]
+      const n = normalize([xf - xi, yf - yi])
+
+      result.push(layOnLine(points[j], [x1 + n[0], y1 + n[1]], zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness)))
+    }
+
+    for (let j = points.length - 1; j >= points.length / 2; j--) {
+      const [x1, y1] = points[j]
+      const n = normalize([xf - xi, yf - yi])
+
+      result.push(layOnLine(points[j], [x1 - n[1], y1 + n[0]], zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, brickInfo.brickWidth)))
     }
   }
 
-  const offsetPoints = traceOffset(points.slice(), brickInfo.brickWidth)
-  const extrudedPolygon = extrudeLinear({ height: 0.1 }, polygon({ points: [points.slice(), offsetPoints.slice().reverse()] }))
-
-  if (winding) {
-    shapes.push(...addSecondSlice(traceWalls(points, offsetPoints, innerPoints, brickInfo, 1), brickInfo))
-    shapes.push(...addSecondSlice(traceBetween(traceWalls(points, offsetPoints, innerPoints, brickInfo, 0)), brickInfo))
-  } else {
-    shapes.push(...addSecondSlice(traceWalls(points, offsetPoints, innerPoints, brickInfo, 0), brickInfo))
-    shapes.push(...addSecondSlice(traceBetween(traceWalls(points, offsetPoints, innerPoints, brickInfo, 1)), brickInfo))
-  }
-
-  // convert to 3D geometry that jscad can render into STL
-  return shapes
-    .map(side => side.filter(cp => !!cp)
-      .map(cp => sphere({ center: cp.concat(0), segments: 4, radius: 0.125 }))
-    )
-    .concat(extrudedPolygon)
+  // return subtract(extrudedPolygon, result)
+  return result.concat(extrudedPolygon)
 }
 
 //
@@ -246,6 +219,11 @@ function intersect ([x1, y1, x2, y2], [x3, y3, x4, y4], enforceSegments = false)
   if (enforceSegments && (ua < 0 || ua > 1 || ub < 0 || ub > 1)) { return false }
 
   return [x1 + ua * (x2 - x1), y1 + ua * (y2 - y1)]
+}
+
+function normalize (v) {
+  const mag = Math.sqrt(v[0] * v[0] + v[1] * v[1])
+  return [v[0] / mag, v[1] / mag]
 }
 
 function normal (v, offset) {
@@ -294,7 +272,7 @@ function sqLineMagnitude (x1, y1, x2, y2) {
   return (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)
 }
 
-function closestPoint ([[x1, y1], [x2, y2]], [px, py]) {
+function closestPointEx ([[x1, y1], [x2, y2]], [px, py], side) {
   const sqLineMag = sqLineMagnitude(x1, y1, x2, y2)
   if (sqLineMag < EPS_SQ) {
     return -1
@@ -302,17 +280,36 @@ function closestPoint ([[x1, y1], [x2, y2]], [px, py]) {
 
   const u = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / sqLineMag
 
-  if ((u < EPS) || (u > 1)) { // closest point does not fall within the line segment, take the shorter distance to an endpoint
-    return [
-      sqLineMagnitude(px, py, x1, y1),
-      sqLineMagnitude(px, py, x2, y2)
-    ]
-  } else { // if (u < EPS) || (u > 1) // intersecting point is on the line, use the formula
-    return [
+  if ((u < EPS) || (u > 1)) { // closest point does not fall within the line segment
+    return [[x1, y1], [x2, y2]]
+  } else {
+    const newPoint = [
       x1 + u * (x2 - x1),
       y1 + u * (y2 - y1)
     ]
-  } // else !(u < EPS) || !(u > 1)
+
+    if (side) {
+      return [newPoint, [x2, y2]]
+    } else {
+      return [[x1, y1], newPoint]
+    }
+  }
+}
+
+function doIt (outerPoints, innerPoints) {
+  const answer = []
+  for (let i = 0; i < outerPoints.length - 1; i++) {
+    const a = outerPoints[i]
+    const b = outerPoints[i + 1]
+
+    const c = innerPoints[i]
+    const d = innerPoints[i + 1]
+
+    const tmp = closestPointEx([a, b], c, true)
+    answer.push(closestPointEx(tmp, d, false))
+  }
+
+  return answer
 }
 
 module.exports = { main }
