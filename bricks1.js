@@ -163,13 +163,17 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
 
   // convert to 3D geometry that jscad can render into STL
   const result = []
-  for (let i = winding ? 0 : 1; i < shapes.length - (winding ? 0 : 1); i += 2) {
+
+  for (let i = 0; i < shapes.length; i += 1) {
     const p = shapes[i]
 
     const [xi, yi] = p[0]
     const [xf, yf] = p[p.length - 1]
 
-    const points = winding ? emitCutPoints([xf, yf], [xi, yi], brickInfo) : traceBetween(emitCutPoints([xf, yf], [xi, yi], brickInfo))
+    const cp = emitCutPoints([xf, yf], [xi, yi], brickInfo)
+    const points = winding
+      ? i % 2 ? traceBetween(cp) : cp
+      : i % 2 ? cp : traceBetween(cp)
 
     for (let j = 0; j < points.length / 2; j++) {
       const [x1, y1] = points[j]
@@ -185,7 +189,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   }
 
   return subtract(extrudedPolygon, result)
-//   return result.concat(extrudedPolygon)
+  // return result.concat(extrudedPolygon)
 }
 
 //
