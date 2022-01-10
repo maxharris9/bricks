@@ -10,22 +10,10 @@ function main () {
   const triangle = [[0, 0], [10, 10], [0, 10]]
   const box = [[0, 0], [9.8, 0], [9.8, 9.8], [0, 9.8]]
   const pentagon = [[12, 6], [6, 10], [0, 6], [0, 0], [12, 0]]
-  const mshape = [[12, 0], [12, 10], [7, 6], [3, 6], [0, 10], [0, 0]]
+  const mshape = [[12, 0], [12, 10], [8, 6], [4, 6], [0, 10], [0, 0]]
   const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
   const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
-  const complex3 = [
-    [0, 0],
-    [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0],
-    [29.6, 0],
-    [29.6, 12.0],
-    [20, 20],
-    [20, 15],
-    [10, 12.0],
-    [10, 6.2],
-    [5, 6.2],
-    [5, 12.0],
-    [0, 12.0]
-  ]
+  const complex3 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [25, 29], [20, 15], [10, 12.0], [10, 6.2], [5, 6.2], [5, 12.0], [0, 12.0]]
   // const complex3 = [[0, 0], [11, 0], [19, -8], [25, -8], [25, -15], [37, -15], [37, 12], [0, 12]]
 
   const brickInfo = makeBrickInfo(1.0 * 1, 0.75 * 1, 1.0 / 20.0 * 1)
@@ -34,11 +22,11 @@ function main () {
   for (let i = 0; i < 2; i++) {
     const winding = i % 2
     const h = i * (brickInfo.brickHeight + brickInfo.mortarThickness) + brickInfo.mortarThickness
-    shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
+    // shapes.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
-    shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
+    // shapes.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
+    // shapes.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([25, 0, h], iterateEdges(complex2, winding, brickInfo, showMortarSlices)))
     shapes.push(translate([60, 0, h], iterateEdges(complex3, winding, brickInfo, showMortarSlices)))
   }
@@ -153,7 +141,139 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const offsetPoints = traceOffset(points.slice(), brickInfo.brickWidth)
   const extrudedPolygon = extrudeLinear({ height: brickInfo.brickHeight }, polygon({ points: [points.slice(), offsetPoints.slice().reverse()] }))
 
-  const shapes = doIt(points, offsetPoints)
+  const result = []
+  const shapes = []
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i]
+    const b = points[i + 1]
+
+    const c = offsetPoints[i]
+    const d = offsetPoints[i + 1]
+
+    const tmp = closestPointEx([a, b], c, true)
+    shapes.push(closestPointEx(tmp, d, false))
+  }
+
+  for (let i = 0; i < points.length - 1; i++) {
+    if (i > 0 && i < points.length - 1) {
+      const angle = getAngle(points[i + 1], points[i], points[i - 1])
+      //       console.log('angle:', angle)
+
+      if (angle < 90) {
+        const diagonalStart = offsetPoints[i]
+        const diagonalEnd = points[i]
+
+        let fuckLen = 0
+        {
+          const [xs, ys] = shapes[i][0]
+          const [xi, yi] = points[i]
+          const [xf, yf] = points[i + 1]
+          const n = normalize([xf - xi, yf - yi])
+          const normy = normal([xf - xi, yf - yi], brickInfo.brickWidth)
+          //           console.log('normy', normy)
+
+          const edgeLenA = len([xs, ys], [xi, yi])
+          const [xx, yy] = shapes[i + 1][0] // (i > shapes.length - 1) ? shapes[i + 1][1] : shapes[i - 1][0]
+          const edgeLenB = len([xx, yy], [xi, yi])
+
+          let iterations = 0
+          if (edgeLenA > edgeLenB) {
+            //             console.log('1. edgeLenA > edgeLenB', edgeLenA, edgeLenB)
+            iterations = Math.ceil(edgeLenB / brickInfo.brickLength) - 1
+          } else {
+            //             console.log('1. edgeLenB > edgeLenA', edgeLenA, edgeLenB)
+            iterations = Math.ceil(edgeLenA / brickInfo.brickLength) - 1
+          }
+
+          console.log('1. iterations:', iterations, 'edgeLenA:', edgeLenA, 'edgeLenB:', edgeLenB)
+
+          // now find the intersection with the diagonal?
+
+          for (let j = 1; j <= iterations; j++) {
+            const asdf = (j * (brickInfo.brickLength + brickInfo.mortarThickness)) - brickInfo.mortarThickness
+
+            const p1 = [xs - n[0] * asdf, ys - n[1] * asdf]
+            const p2 = [xs, ys]
+
+            const p1p = [p1[0] + normy[0], p1[1] + normy[1]]
+            //             const p2p = [p2[0] + normy[0], p2[1] + normy[1]]
+
+            let lenny = 1
+            const res = intersect([...diagonalEnd, ...diagonalStart], [...p1p, ...p1], false)
+            if (res !== false) {
+              lenny = len(p1, res)
+              fuckLen = len(diagonalStart, res)
+              console.log('diagonalStart:', diagonalStart, 'res:', res, 'fuckLen:', fuckLen)
+            }
+
+            result.push(layOnLine(
+              p1, p2,
+              zeroedCuboid(brickInfo.brickHeight, lenny, brickInfo.mortarThickness))
+            )
+          }
+        }
+        {
+          const [xs, ys] = shapes[i - 1][1]
+          const [xf, yf] = points[i - 1]
+          const [xi, yi] = points[i]
+          const n = normalize([xf - xi, yf - yi])
+          const normy = normal([xf - xi, yf - yi], brickInfo.brickWidth)
+          // console.log('normy', normy)
+
+          //           const edgeLenA = len([xs, ys], shapes[i][1])
+          //           const edgeLenB = len([xf, yf], shapes[i][1])
+
+          const edgeLenA = len([xs, ys], [xi, yi])
+          const [xx, yy] = (i > shapes.length - 1) ? shapes[i + 1][0] : shapes[0][0]
+          const edgeLenB = len([xx, yy], [xi, yi])
+
+          let iterations = 0
+          if (edgeLenA > edgeLenB) {
+            //             console.log('2. edgeLenA > edgeLenB', edgeLenA, edgeLenB)
+            iterations = Math.ceil(edgeLenB / brickInfo.brickLength) - 1
+          } else {
+            //             console.log('2. edgeLenB > edgeLenA', edgeLenA, edgeLenB)
+            iterations = Math.ceil(edgeLenA / brickInfo.brickLength) - 1
+          }
+
+          console.log('2. iterations:', iterations, 'edgeLenA:', edgeLenA, 'edgeLenB:', edgeLenB)
+
+          for (let j = 1; j <= iterations; j++) {
+            const asdf = (j * (brickInfo.brickLength + brickInfo.mortarThickness)) - brickInfo.brickWidth
+            const p1 = [xs - n[0] * asdf, ys - n[1] * asdf]
+            const p2 = [xi, yi]
+
+            const p1p = [p1[0] + normy[0], p1[1] + normy[1]]
+            //             const p2p = [p2[0] + normy[0], p2[1] + normy[1]]
+
+            let lenny = 1
+            const res = intersect([...diagonalStart, ...diagonalEnd], [...p1p, ...p1], false)
+            if (res !== false) {
+              fuckLen = len(diagonalStart, res)
+              lenny = len(p1, res)
+              console.log('diagonalStart:', diagonalStart, 'res:', res, 'fuckLen:', fuckLen)
+            }
+
+            result.push(layOnLine(
+              p1, p2,
+              zeroedCuboid(brickInfo.brickHeight, lenny, brickInfo.mortarThickness))
+            )
+          }
+        }
+
+        const f = fuckLen // 5.41 // Math.abs(len(diagonalStart, diagonalEnd))
+        console.log('f:', f)
+        //         console.log('diagonalStart:', diagonalStart, 'diagonalEnd:', diagonalEnd)
+
+        result.push(layOnLine(
+          diagonalStart,
+          diagonalEnd,
+          zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, f)
+        ))
+      }
+    }
+  }
 
   //   return shapes
   //     .map(side => side.filter(cp => !!cp)
@@ -162,7 +282,6 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   //     .concat(extrudedPolygon)
 
   // convert to 3D geometry that jscad can render into STL
-  const result = []
 
   for (let i = 0; i < shapes.length; i += 1) {
     const p = shapes[i]
@@ -189,7 +308,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   }
 
   return subtract(extrudedPolygon, result)
-  // return result.concat(extrudedPolygon)
+//   return result.concat(extrudedPolygon)
 }
 
 //
@@ -198,6 +317,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
 
 // see http://paulbourke.net/geometry/pointlineplane/
 function intersect ([x1, y1, x2, y2], [x3, y3, x4, y4], enforceSegments = false) {
+  // console.log('x1, y1 -> x4, y4:', x1, y1, x2, y2, x3, y3, x4, y4)
   // there is likely no intersection if either line is a point, so just bail
   if ((x1 === x2 && y1 === y2) || (x3 === x4 && y3 === y4)) { return false }
 
@@ -290,20 +410,13 @@ function closestPointEx ([[x1, y1], [x2, y2]], [px, py], side) {
   }
 }
 
-function doIt (outerPoints, innerPoints) {
-  const answer = []
-  for (let i = 0; i < outerPoints.length - 1; i++) {
-    const a = outerPoints[i]
-    const b = outerPoints[i + 1]
+function getAngle (p0, p1, p2) {
+  const dAx = p1[0] - p0[0]
+  const dAy = p1[1] - p0[1]
+  const dBx = p2[0] - p1[0]
+  const dBy = p2[1] - p1[1]
 
-    const c = innerPoints[i]
-    const d = innerPoints[i + 1]
-
-    const tmp = closestPointEx([a, b], c, true)
-    answer.push(closestPointEx(tmp, d, false))
-  }
-
-  return answer
+  return 180 + (Math.atan2(dAx * dBy - dAy * dBx, dAx * dBx + dAy * dBy) * 180 / Math.PI)
 }
 
 module.exports = { main }
