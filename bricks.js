@@ -152,27 +152,21 @@ function acute (i, cornerCuts, points, offsetPoints, brickInfo, eep, result) {
 
   const iterations = Math.ceil(Math.min(edgeLenA, edgeLenB) / brickInfo.brickLength) - 1
 
-  // cut mortar joints from cornerCut -> diagonalEnd, finding the intersection with the diagonal along the way
+  // cut mortar joints, finding the depth by intersecting with the diagonal along the way
   for (let j = 1; j <= iterations; j++) {
     const offset = eep ? brickInfo.mortarThickness : brickInfo.brickWidth
-    const asdf = (j * (brickInfo.brickLength + brickInfo.mortarThickness)) - offset
+    const cutDistance = (j * (brickInfo.brickLength + brickInfo.mortarThickness)) - offset
     const [xs, ys] = eep ? cornerCuts[i][0] : cornerCuts[i - 1][1]
 
-    const p1 = [xs - n[0] * asdf, ys - n[1] * asdf]
+    const p1 = [xs - n[0] * cutDistance, ys - n[1] * cutDistance]
     const p2 = eep ? [xs, ys] : [xi, yi]
     const p1p = [p1[0] + normy[0], p1[1] + normy[1]]
 
-    let cutDepth = 1
     const res = intersect([...diagonalEnd, ...diagonalStart], [...p1p, ...p1], false)
     if (res !== false) {
-      cutDepth = len(p1, res)
       miterLength = len(diagonalStart, res)
+      result.push(layOnLine(p1, p2, zeroedCuboid(brickInfo.brickHeight, len(p1, res), brickInfo.mortarThickness)))
     }
-
-    result.push(layOnLine(
-      p1, p2,
-      zeroedCuboid(brickInfo.brickHeight, cutDepth, brickInfo.mortarThickness))
-    )
   }
 
   return miterLength
@@ -201,8 +195,8 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
       const angle = getAngle(points[i + 1], points[i], points[i - 1])
 
       if (angle < 90) {
-        const miterLength = acute(i, cornerCuts, points, offsetPoints, brickInfo, true, result)
-        acute(i, cornerCuts, points, offsetPoints, brickInfo, false, result)
+        const miterLength = acute(i, cornerCuts, points, offsetPoints, brickInfo, !winding, result)
+        acute(i, cornerCuts, points, offsetPoints, brickInfo, winding, result)
 
         if (miterLength > 0) {
           result.push(layOnLine(
@@ -215,14 +209,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
     }
   }
 
-  //   return cornerCuts
-  //     .map(side => side.filter(cp => !!cp)
-  //       .map((cp, i) => sphere({ center: [cp[0], cp[1], 0], segments: 4, radius: (0 + 1) * 0.25 }))
-  //     )
-  //     .concat(extrudedPolygon)
-
   // convert to 3D geometry that jscad can render into STL
-
   for (let i = 0; i < cornerCuts.length; i += 1) {
     const p = cornerCuts[i]
 
