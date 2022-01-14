@@ -2,7 +2,7 @@
 
 jscad -v bricks.js;
 
-if [ (shasum bricks.stl) = "254f729961bf893a72ef3a721417c33594bbc43a  bricks.stl" ]
+if [ (shasum bricks.stl) = "cfd1e49e42ffb64d93a14eec63cd0b5340afd73d  bricks.stl" ]
   echo "test passed"
 else
   echo "test failed"

@@ -14,7 +14,6 @@ function main () {
   const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
   const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
   const complex3 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [25, 39], [20, 15], [10, 12.0], [10, 6.2], [5, 6.2], [5, 12.0], [0, 12.0]]
-  // const complex3 = [[0, 0], [11, 0], [19, -8], [25, -8], [25, -15], [37, -15], [37, 12], [0, 12]]
 
   const brickInfo = makeBrickInfo(1.0 * 1, 0.75 * 1, 1.0 / 20.0 * 1)
 
@@ -137,6 +136,48 @@ function layOnLine (p2, p1, geometry) {
   return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
 }
 
+function acute (i, cornerCuts, points, offsetPoints, brickInfo, eep, result) {
+  let miterLength = 0
+
+  const diagonalStart = offsetPoints[i]
+  const diagonalEnd = points[i]
+
+  const [xi, yi] = points[i]
+  const [xf, yf] = eep ? points[i + 1] : points[i - 1]
+  const n = normalize([xf - xi, yf - yi])
+  const normy = normal([xf - xi, yf - yi], brickInfo.brickWidth)
+
+  const edgeLenA = len(cornerCuts[i - 1][1], [xi, yi])
+  const edgeLenB = len(cornerCuts[i][0], [xi, yi])
+
+  const iterations = Math.ceil(Math.min(edgeLenA, edgeLenB) / brickInfo.brickLength) - 1
+
+  // cut mortar joints from cornerCut -> diagonalEnd, finding the intersection with the diagonal along the way
+  for (let j = 1; j <= iterations; j++) {
+    const offset = eep ? brickInfo.mortarThickness : brickInfo.brickWidth
+    const asdf = (j * (brickInfo.brickLength + brickInfo.mortarThickness)) - offset
+    const [xs, ys] = eep ? cornerCuts[i][0] : cornerCuts[i - 1][1]
+
+    const p1 = [xs - n[0] * asdf, ys - n[1] * asdf]
+    const p2 = eep ? [xs, ys] : [xi, yi]
+    const p1p = [p1[0] + normy[0], p1[1] + normy[1]]
+
+    let cutDepth = 1
+    const res = intersect([...diagonalEnd, ...diagonalStart], [...p1p, ...p1], false)
+    if (res !== false) {
+      cutDepth = len(p1, res)
+      miterLength = len(diagonalStart, res)
+    }
+
+    result.push(layOnLine(
+      p1, p2,
+      zeroedCuboid(brickInfo.brickHeight, cutDepth, brickInfo.mortarThickness))
+    )
+  }
+
+  return miterLength
+}
+
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const offsetPoints = traceOffset(points.slice(), brickInfo.brickWidth)
   const extrudedPolygon = extrudeLinear({ height: brickInfo.brickHeight }, polygon({ points: [points.slice(), offsetPoints.slice().reverse()] }))
@@ -160,93 +201,13 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
       const angle = getAngle(points[i + 1], points[i], points[i - 1])
 
       if (angle < 90) {
-        const diagonalStart = offsetPoints[i]
-        const diagonalEnd = points[i]
-
-        let miterLength = 0
-        { // this one seems OK
-          const [xs, ys] = cornerCuts[i][0]
-          const [xi, yi] = points[i]
-          const [xf, yf] = points[i + 1]
-          const n = normalize([xf - xi, yf - yi])
-          const normy = normal([xf - xi, yf - yi], brickInfo.brickWidth)
-
-          const edgeLenA = len(cornerCuts[i - 1][1], [xi, yi])
-          const edgeLenB = len(cornerCuts[i][0], [xi, yi])
-
-          let iterations = 0
-          if (edgeLenA > edgeLenB) {
-            iterations = Math.ceil(edgeLenB / brickInfo.brickLength) - 1
-          } else {
-            iterations = Math.ceil(edgeLenA / brickInfo.brickLength) - 1
-          }
-
-          // now find the intersection with the diagonal
-          for (let j = 1; j <= iterations; j++) {
-            const asdf = (j * (brickInfo.brickLength + brickInfo.mortarThickness)) - brickInfo.mortarThickness
-
-            const p1 = [xs - n[0] * asdf, ys - n[1] * asdf]
-            const p2 = [xs, ys]
-            const p1p = [p1[0] + normy[0], p1[1] + normy[1]]
-
-            let lenny = 1
-            const res = intersect([...diagonalEnd, ...diagonalStart], [...p1p, ...p1], false)
-            if (res !== false) {
-              lenny = len(p1, res)
-              miterLength = len(diagonalStart, res)
-            }
-
-            result.push(layOnLine(
-              p1, p2,
-              zeroedCuboid(brickInfo.brickHeight, lenny, brickInfo.mortarThickness))
-            )
-          }
-        }
-        {
-          const [xf, yf] = points[i - 1]
-          const [xi, yi] = points[i]
-          const n = normalize([xf - xi, yf - yi])
-          const normy = normal([xf - xi, yf - yi], brickInfo.brickWidth)
-
-          const edgeLenA = len(cornerCuts[i - 1][1], [xi, yi])
-          const edgeLenB = len(cornerCuts[i][0], [xi, yi])
-
-          let iterations = 0
-          if (edgeLenA > edgeLenB) {
-            iterations = Math.ceil(edgeLenB / brickInfo.brickLength) - 1
-          } else {
-            iterations = Math.ceil(edgeLenA / brickInfo.brickLength) - 1
-          }
-
-          // now find the intersection with the diagonal
-          for (let j = 1; j <= iterations; j++) {
-          // for (let j = iterations; j > 0; j--) {
-            const asdf = (j * (brickInfo.brickLength + brickInfo.mortarThickness)) - brickInfo.brickWidth
-            const xp = cornerCuts[i - 1][1][0]
-            const yp = cornerCuts[i - 1][1][1]
-            const p1 = [xp - n[0] * asdf, yp - n[1] * asdf]
-            const p2 = [xi, yi]
-
-            const p1p = [p1[0] + normy[0], p1[1] + normy[1]]
-
-            let lenny = 1
-            const res = intersect([...diagonalStart, ...diagonalEnd], [...p1p, ...p1], false)
-            if (res !== false) {
-              lenny = len(p1, res)
-              // miterLength = len(diagonalStart, res)
-            }
-
-            result.push(layOnLine(
-              p1, p2,
-              zeroedCuboid(brickInfo.brickHeight, lenny, brickInfo.mortarThickness))
-            )
-          }
-        }
+        const miterLength = acute(i, cornerCuts, points, offsetPoints, brickInfo, true, result)
+        acute(i, cornerCuts, points, offsetPoints, brickInfo, false, result)
 
         if (miterLength > 0) {
           result.push(layOnLine(
-            diagonalStart,
-            diagonalEnd,
+            offsetPoints[i],
+            points[i],
             zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, miterLength)
           ))
         }
