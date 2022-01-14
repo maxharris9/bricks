@@ -5,7 +5,7 @@ const { extrudeLinear } = jscad.extrusions
 const { subtract } = jscad.booleans
 
 function main () {
-  const cornerCuts = []
+  const result = []
 
   const triangle = [[0, 0], [10, 10], [0, 10]]
   const box = [[0, 0], [9.8, 0], [9.8, 9.8], [0, 9.8]]
@@ -22,16 +22,16 @@ function main () {
   for (let i = 0; i < 1; i++) {
     const winding = i % 2
     const h = i * (brickInfo.brickHeight + brickInfo.mortarThickness) + brickInfo.mortarThickness
-    cornerCuts.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
-    cornerCuts.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
-    cornerCuts.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
-    cornerCuts.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
-    // cornerCuts.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
-    cornerCuts.push(translate([25, 0, h], iterateEdges(complex2, winding, brickInfo, showMortarSlices)))
-    cornerCuts.push(translate([60, 0, h], iterateEdges(complex3, winding, brickInfo, showMortarSlices)))
+    result.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
+    result.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
+    result.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
+    result.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
+    result.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
+    result.push(translate([25, 0, h], iterateEdges(complex2, winding, brickInfo, showMortarSlices)))
+    result.push(translate([60, 0, h], iterateEdges(complex3, winding, brickInfo, showMortarSlices)))
   }
 
-  return rotate([Math.PI / 2, 0, 0], translate([50, 0, 0], cornerCuts))
+  return rotate([Math.PI / 2, 0, 0], translate([50, 0, 0], result))
 }
 
 function len (curr, next) {
@@ -246,11 +246,13 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
           }
         }
 
-        result.push(layOnLine(
-          diagonalStart,
-          diagonalEnd,
-          zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, miterLength)
-        ))
+        if (miterLength > 0) {
+          result.push(layOnLine(
+            diagonalStart,
+            diagonalEnd,
+            zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, miterLength)
+          ))
+        }
       }
     }
   }
