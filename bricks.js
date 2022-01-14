@@ -13,19 +13,19 @@ function main () {
   const mshape = [[12, 0], [12, 10], [8, 6], [4, 6], [0, 10], [0, 0]]
   const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
   const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
-  const complex3 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [25, 29], [20, 15], [10, 12.0], [10, 6.2], [5, 6.2], [5, 12.0], [0, 12.0]]
+  const complex3 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [25, 39], [20, 15], [10, 12.0], [10, 6.2], [5, 6.2], [5, 12.0], [0, 12.0]]
   // const complex3 = [[0, 0], [11, 0], [19, -8], [25, -8], [25, -15], [37, -15], [37, 12], [0, 12]]
 
   const brickInfo = makeBrickInfo(1.0 * 1, 0.75 * 1, 1.0 / 20.0 * 1)
 
   const showMortarSlices = true
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 1; i++) {
     const winding = i % 2
     const h = i * (brickInfo.brickHeight + brickInfo.mortarThickness) + brickInfo.mortarThickness
-    // cornerCuts.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
+    cornerCuts.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
     cornerCuts.push(translate([-45, 0, h], iterateEdges(box, winding, brickInfo, showMortarSlices)))
     cornerCuts.push(translate([-30, 0, h], iterateEdges(pentagon, winding, brickInfo, showMortarSlices)))
-    // cornerCuts.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
+    cornerCuts.push(translate([-30, 20, h], iterateEdges(mshape, winding, brickInfo, showMortarSlices)))
     // cornerCuts.push(translate([-10, 0, h], iterateEdges(complex, winding, brickInfo, showMortarSlices)))
     cornerCuts.push(translate([25, 0, h], iterateEdges(complex2, winding, brickInfo, showMortarSlices)))
     cornerCuts.push(translate([60, 0, h], iterateEdges(complex3, winding, brickInfo, showMortarSlices)))
@@ -164,16 +164,16 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
         const diagonalEnd = points[i]
 
         let miterLength = 0
-        {
+        { // this one seems OK
           const [xs, ys] = cornerCuts[i][0]
           const [xi, yi] = points[i]
           const [xf, yf] = points[i + 1]
           const n = normalize([xf - xi, yf - yi])
           const normy = normal([xf - xi, yf - yi], brickInfo.brickWidth)
 
-          const edgeLenA = len([xs, ys], [xi, yi])
-          const [xx, yy] = cornerCuts[i + 1][0] // (i > cornerCuts.length - 1) ? cornerCuts[i + 1][1] : cornerCuts[i - 1][0]
-          const edgeLenB = len([xx, yy], [xi, yi])
+          const edgeLenA = len(cornerCuts[i - 1][1], [xi, yi])
+          // const [xx, yy] = cornerCuts[i - 1][1] // (i > cornerCuts.length - 1) ? cornerCuts[i + 1][1] : cornerCuts[i - 1][0]
+          const edgeLenB = len(cornerCuts[i][0], [xi, yi])
 
           let iterations = 0
           if (edgeLenA > edgeLenB) {
@@ -204,15 +204,15 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
           }
         }
         {
-          const [xs, ys] = cornerCuts[i - 1][1]
+          // const [xs, ys] = cornerCuts[i][1]
           const [xf, yf] = points[i - 1]
           const [xi, yi] = points[i]
           const n = normalize([xf - xi, yf - yi])
           const normy = normal([xf - xi, yf - yi], brickInfo.brickWidth)
 
-          const edgeLenA = len([xs, ys], [xi, yi])
-          const [xx, yy] = (i > cornerCuts.length - 1) ? cornerCuts[i + 1][0] : cornerCuts[0][0]
-          const edgeLenB = len([xx, yy], [xi, yi])
+          const edgeLenA = len(cornerCuts[i - 1][1], [xi, yi])
+          // const [xx, yy] = cornerCuts[i][0] // (i > cornerCuts.length - 1) ? cornerCuts[i][0] : cornerCuts[i][0]
+          const edgeLenB = len(cornerCuts[i][0], [xi, yi])
 
           let iterations = 0
           if (edgeLenA > edgeLenB) {
@@ -223,8 +223,11 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
 
           // now find the intersection with the diagonal
           for (let j = 1; j <= iterations; j++) {
+          // for (let j = iterations; j > 0; j--) {
             const asdf = (j * (brickInfo.brickLength + brickInfo.mortarThickness)) - brickInfo.brickWidth
-            const p1 = [xs - n[0] * asdf, ys - n[1] * asdf]
+            const xp = cornerCuts[i - 1][1][0]
+            const yp = cornerCuts[i - 1][1][1]
+            const p1 = [xp - n[0] * asdf, yp - n[1] * asdf]
             const p2 = [xi, yi]
 
             const p1p = [p1[0] + normy[0], p1[1] + normy[1]]
@@ -233,7 +236,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
             const res = intersect([...diagonalStart, ...diagonalEnd], [...p1p, ...p1], false)
             if (res !== false) {
               lenny = len(p1, res)
-              miterLength = len(diagonalStart, res)
+              // miterLength = len(diagonalStart, res)
             }
 
             result.push(layOnLine(
@@ -285,7 +288,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   }
 
   return subtract(extrudedPolygon, result)
-//   return result.concat(extrudedPolygon)
+  // return result.concat(extrudedPolygon)
 }
 
 //
