@@ -172,7 +172,6 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
           const normy = normal([xf - xi, yf - yi], brickInfo.brickWidth)
 
           const edgeLenA = len(cornerCuts[i - 1][1], [xi, yi])
-          // const [xx, yy] = cornerCuts[i - 1][1] // (i > cornerCuts.length - 1) ? cornerCuts[i + 1][1] : cornerCuts[i - 1][0]
           const edgeLenB = len(cornerCuts[i][0], [xi, yi])
 
           let iterations = 0
@@ -204,14 +203,12 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
           }
         }
         {
-          // const [xs, ys] = cornerCuts[i][1]
           const [xf, yf] = points[i - 1]
           const [xi, yi] = points[i]
           const n = normalize([xf - xi, yf - yi])
           const normy = normal([xf - xi, yf - yi], brickInfo.brickWidth)
 
           const edgeLenA = len(cornerCuts[i - 1][1], [xi, yi])
-          // const [xx, yy] = cornerCuts[i][0] // (i > cornerCuts.length - 1) ? cornerCuts[i][0] : cornerCuts[i][0]
           const edgeLenB = len(cornerCuts[i][0], [xi, yi])
 
           let iterations = 0
