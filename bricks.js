@@ -218,7 +218,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   }
 
   // convert to 3D geometry that jscad can render into STL
-  for (let i = 0; i < cornerCuts.length - 1; i++) {
+  for (let i = 0; i < cornerCuts.length; i++) {
     const p = cornerCuts[i]
     const cp = emitCutPoints(p[1], p[0], brickInfo)
     const currentPoints = winding
@@ -229,7 +229,7 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
         ? cp
         : traceBetween(cp)
 
-    const np = cornerCuts[i + 1]
+    const np = (i === cornerCuts.length - 1) ? cornerCuts[0] : cornerCuts[i + 1]
     const cpp = emitCutPoints(np[1], np[0], brickInfo)
     const nextPoints = !winding
       ? i % 2
@@ -238,8 +238,6 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
       : i % 2
         ? cpp
         : traceBetween(cpp)
-
-    // console.log('currentPoints:', currentPoints)
 
     const a = currentPoints[currentPoints.length - 1]
     const b = points[i + 1]
