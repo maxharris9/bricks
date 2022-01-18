@@ -10,7 +10,7 @@ function main () {
   const triangle = [[0, 0], [10, 10], [0, 10]]
   const box = [[0, 0], [9.8, 0], [9.8, 9.8], [0, 9.8]]
   const pentagon = [[12, 6], [6, 10], [0, 6], [0, 0], [12, 0]]
-  const mshape = [[12, 0], [12, 10], [8, 6], [4, 6], [0, 10], [0, 0]]
+  const mshape = [[12, 0], [12, 20], [8, 6], [4, 6], [0, 20], [0, 5], [-2, 0]]
   const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
   const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
   const complex3 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [25, 39], [20, 15], [10, 12.0], [10, 6.2], [5, 6.2], [5, 12.0], [0, 12.0]]
@@ -136,40 +136,60 @@ function layOnLine (p2, p1, geometry) {
   return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
 }
 
-function acute (i, cornerCuts, points, offsetPoints, brickInfo, eep, result) {
+function layOnLineLeft (p2, p1, geometry) {
+  const deltaX = p1[0] - p2[0]
+  const deltaY = p1[1] - p2[1]
+  const inclinationAngle = Math.PI / 2
+  const azimuthalAngle = Math.atan2(deltaY, deltaX)
+
+  return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
+}
+
+function doit (iterations, brickInfo, a, b, d, nAB, normyAB, layFunc, result) {
   let miterLength = 0
 
-  const diagonalStart = offsetPoints[i]
-  const diagonalEnd = points[i]
+  for (let j = 1; j < iterations; j++) {
+    const cutDistance = (j * (
+      brickInfo.brickLength +
+      brickInfo.mortarThickness))
+    const [xs, ys] = a
 
-  const [xi, yi] = points[i]
-  const [xf, yf] = eep ? points[i + 1] : points[i - 1]
-  const n = normalize([xf - xi, yf - yi])
-  const normy = normal([xf - xi, yf - yi], brickInfo.brickWidth)
+    const p1 = [xs + nAB[0] * cutDistance, ys + nAB[1] * cutDistance]
+    const p2 = b
+    const p1p = [p1[0] + normyAB[0], p1[1] + normyAB[1]]
 
-  const edgeLenA = len(cornerCuts[i - 1][1], [xi, yi])
-  const edgeLenB = len(cornerCuts[i][0], [xi, yi])
-
-  const iterations = Math.ceil(Math.min(edgeLenA, edgeLenB) / brickInfo.brickLength) - 1
-
-  // cut mortar joints, finding the depth by intersecting with the diagonal along the way
-  for (let j = 1; j <= iterations; j++) {
-    const offset = eep ? brickInfo.mortarThickness : brickInfo.brickWidth
-    const cutDistance = (j * (brickInfo.brickLength + brickInfo.mortarThickness)) - offset
-    const [xs, ys] = eep ? cornerCuts[i][0] : cornerCuts[i - 1][1]
-
-    const p1 = [xs - n[0] * cutDistance, ys - n[1] * cutDistance]
-    const p2 = eep ? [xs, ys] : [xi, yi]
-    const p1p = [p1[0] + normy[0], p1[1] + normy[1]]
-
-    const res = intersect([...diagonalEnd, ...diagonalStart], [...p1p, ...p1], false)
+    const res = intersect([...b, ...d], [...p1p, ...p1], false)
     if (res !== false) {
-      miterLength = len(diagonalStart, res)
-      result.push(layOnLine(p1, p2, zeroedCuboid(brickInfo.brickHeight, len(p1, res), brickInfo.mortarThickness)))
+      miterLength = len(d, res)
+      result.push(layFunc(p1, p2, zeroedCuboid(brickInfo.brickHeight, len(p1, res), brickInfo.mortarThickness)))
     }
   }
 
   return miterLength
+}
+
+function bcute (a, b, c, d, brickInfo, winding, result) {
+  const edgeLenA = len(a, b)
+  const edgeLenB = len(c, b)
+  const iterations = Math.ceil(Math.max(edgeLenA, edgeLenB) / brickInfo.brickLength)
+  // console.log('edgeLenA:', edgeLenA, 'edgeLenB:', edgeLenB, 'direction:', direction)
+
+  // cut mortar joints, finding the depth by intersecting with the diagonal along the way
+  let miterLength = 0
+
+  const deltaCB = [b[0] - c[0], b[1] - c[1]]
+  miterLength = doit(iterations, brickInfo, c, b, d, normalize(deltaCB), normal(deltaCB, brickInfo.brickWidth), layOnLineLeft, result)
+
+  const deltaAB = [b[0] - a[0], b[1] - a[1]]
+  miterLength = doit(iterations, brickInfo, a, b, d, normalize(deltaAB), normal(deltaAB, brickInfo.brickWidth), layOnLine, result)
+
+  if (miterLength === 0) { return }
+
+  if (edgeLenA > edgeLenB) {
+    result.push(layOnLine(d, b, zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, miterLength + brickInfo.mortarThickness)))
+  } else {
+    result.push(layOnLine(d, b, zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, miterLength + brickInfo.mortarThickness)))
+  }
 }
 
 function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
@@ -190,47 +210,52 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
     cornerCuts.push(closestPointEx(tmp, d, false))
   }
 
-  for (let i = 0; i < points.length - 1; i++) {
-    if (i > 0 && i < points.length - 1) {
-      const angle = getAngle(points[i + 1], points[i], points[i - 1])
-
-      if (angle < 90) {
-        const miterLength = acute(i, cornerCuts, points, offsetPoints, brickInfo, !winding, result)
-        acute(i, cornerCuts, points, offsetPoints, brickInfo, winding, result)
-
-        if (miterLength > 0) {
-          result.push(layOnLine(
-            offsetPoints[i],
-            points[i],
-            zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, miterLength)
-          ))
-        }
-      }
-    }
-  }
-
   // convert to 3D geometry that jscad can render into STL
-  for (let i = 0; i < cornerCuts.length; i += 1) {
+  for (let i = 0; i < cornerCuts.length - 1; i++) {
     const p = cornerCuts[i]
+    const cp = emitCutPoints(p[1], p[0], brickInfo)
+    const currentPoints = winding
+      ? i % 2
+          ? traceBetween(cp)
+          : cp
+      : i % 2
+        ? cp
+        : traceBetween(cp)
+
+    const np = cornerCuts[i + 1]
+    const cpp = emitCutPoints(np[1], np[0], brickInfo)
+    const nextPoints = !winding
+      ? i % 2
+          ? traceBetween(cpp)
+          : cpp
+      : i % 2
+        ? cpp
+        : traceBetween(cpp)
+
+    // console.log('currentPoints:', currentPoints)
+
+    const a = currentPoints[currentPoints.length - 1]
+    const b = points[i + 1]
+    const c = nextPoints[0]
+    const d = offsetPoints[i + 1]
+
+    const angle = getAngle(c, b, a)
+    if (angle < 90) {
+      bcute(a, b, c, d, brickInfo, winding, result)
+    }
 
     const [xi, yi] = p[0]
-    const [xf, yf] = p[p.length - 1]
+    const [xf, yf] = p[1]
+    const n = normalize([xf - xi, yf - yi])
 
-    const cp = emitCutPoints([xf, yf], [xi, yi], brickInfo)
-    const points = winding
-      ? i % 2 ? traceBetween(cp) : cp
-      : i % 2 ? cp : traceBetween(cp)
-
-    for (let j = 0; j < points.length / 2; j++) {
-      const [x1, y1] = points[j]
-      const n = normalize([xf - xi, yf - yi])
-      result.push(layOnLine(points[j], [x1 + n[0], y1 + n[1]], zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness)))
+    for (let j = 0; j < currentPoints.length / 2; j++) {
+      const [x1, y1] = currentPoints[j]
+      result.push(layOnLine(currentPoints[j], [x1 + n[0], y1 + n[1]], zeroedCuboid(brickInfo.brickHeight, brickInfo.brickWidth, brickInfo.mortarThickness)))
     }
 
-    for (let j = points.length - 1; j >= points.length / 2; j--) {
-      const [x1, y1] = points[j]
-      const n = normalize([xf - xi, yf - yi])
-      result.push(layOnLine(points[j], [x1 - n[1], y1 + n[0]], zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, brickInfo.brickWidth)))
+    for (let j = currentPoints.length - 1; j >= currentPoints.length / 2; j--) {
+      const [x1, y1] = currentPoints[j]
+      result.push(layOnLine(currentPoints[j], [x1 - n[1], y1 + n[0]], zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, brickInfo.brickWidth)))
     }
   }
 
