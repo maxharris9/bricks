@@ -10,7 +10,7 @@ function main () {
   const triangle = [[0, 0], [10, 10], [0, 10]]
   const box = [[0, 0], [9.8, 0], [9.8, 9.8], [0, 9.8]]
   const pentagon = [[12, 6], [6, 10], [0, 6], [0, 0], [12, 0]]
-  const mshape = [[12, 0], [12, 20], [8, 6], [4, 6], [0, 20], [0, 5], [-2, 0]]
+  const mshape = [[12, 0], [12, 20], [8, 6], [4, 6], [0, 20], [0, 0]]
   const complex = [[0, 0], [7.2, 0], [14.2, 8.8], [18, 8.8], [19.8, 0], [29.4, 0], [29.6, 12.0], [0, 12.0]]
   const complex2 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [0, 12.0]]
   const complex3 = [[0, 0], [7.2, 0], [10.2, -8.8], [18, -8.8], [19.8, 0], [29.6, 0], [29.6, 12.0], [25, 39], [20, 15], [10, 12.0], [10, 6.2], [5, 6.2], [5, 12.0], [0, 12.0]]
@@ -206,12 +206,12 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
   const result = []
   const cornerCuts = []
 
-  for (let i = 0; i < points.length - 1; i++) {
+  for (let i = 0; i < points.length; i++) {
     const a = points[i]
-    const b = points[i + 1]
+    const b = (i === points.length - 1) ? points[0] : points[i + 1]
 
     const c = offsetPoints[i]
-    const d = offsetPoints[i + 1]
+    const d = (i === offsetPoints.length - 1) ? offsetPoints[0] : offsetPoints[i + 1]
 
     const tmp = closestPointEx([a, b], c, true)
     cornerCuts.push(closestPointEx(tmp, d, false))
@@ -240,9 +240,9 @@ function iterateEdges (points, winding, brickInfo, showMortarSlices = false) {
         : traceBetween(cpp)
 
     const a = currentPoints[currentPoints.length - 1]
-    const b = points[i + 1]
+    const b = (i === points.length - 1) ? points[0] : points[i + 1]
     const c = nextPoints[0]
-    const d = offsetPoints[i + 1]
+    const d = (i === offsetPoints.length - 1) ? offsetPoints[0] : offsetPoints[i + 1]
 
     const angle = getAngle(c, b, a)
     if (angle < 90) {
