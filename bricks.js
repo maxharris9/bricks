@@ -18,7 +18,7 @@ function main () {
   const brickInfo = makeBrickInfo(1.0 * 1, 0.75 * 1, 1.0 / 20.0 * 1)
 
   const showMortarSlices = true
-  for (let i = 0; i < 1; i++) {
+  for (let i = 0; i < 4; i++) {
     const winding = i % 2
     const h = i * (brickInfo.brickHeight + brickInfo.mortarThickness) + brickInfo.mortarThickness
     result.push(translate([-60, 0, h], iterateEdges(triangle, winding, brickInfo, showMortarSlices)))
@@ -124,9 +124,13 @@ function traceBetween (points) {
 }
 
 function zeroedCuboid (length, width, height) {
-  return cuboid({ size: [length, width, height], center: [-length / 2, -width / 2, -height / 2] })
+  return cuboid({
+    size: [length, width, height],
+    center: [-length / 2, -width / 2, -height / 2]
+  })
 }
 
+// TODO: combine these four somehow, or at least name them better and put them in better order
 function layOnLine (p2, p1, geometry) {
   const deltaX = p2[0] - p1[0]
   const deltaY = p2[1] - p1[1]
@@ -136,7 +140,25 @@ function layOnLine (p2, p1, geometry) {
   return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
 }
 
-function layOnLineLeft (p2, p1, geometry) {
+function layOnLineEx (p2, p1, geometry) {
+  const deltaX = p2[0] - p1[0]
+  const deltaY = p2[1] - p1[1]
+  const inclinationAngle = Math.PI / 2
+  const azimuthalAngle = Math.atan2(deltaY, deltaX)
+
+  return translate(p2, rotate([0, inclinationAngle, azimuthalAngle - Math.PI / 2], geometry))
+}
+
+function layOnLine2Ex (p2, p1, geometry) {
+  const deltaX = p1[0] - p2[0]
+  const deltaY = p1[1] - p2[1]
+  const inclinationAngle = Math.PI / 2
+  const azimuthalAngle = Math.atan2(deltaY, deltaX)
+
+  return translate(p2, rotate([0, inclinationAngle, azimuthalAngle - Math.PI / 2], geometry))
+}
+
+function layOnLine2 (p2, p1, geometry) {
   const deltaX = p1[0] - p2[0]
   const deltaY = p1[1] - p2[1]
   const inclinationAngle = Math.PI / 2
@@ -145,7 +167,7 @@ function layOnLineLeft (p2, p1, geometry) {
   return translate(p2, rotate([0, inclinationAngle, azimuthalAngle], geometry))
 }
 
-function cutAcuteHeadJoints (iterations, brickInfo, a, b, d, nAB, normyAB, layFunc, result) {
+function cutAcuteHeadJoints (iterations, brickInfo, a, b, d, nAB, normyAB, layFunc, eep, result) {
   let miterLength = 0
 
   for (let j = 1; j < iterations; j++) {
@@ -159,11 +181,15 @@ function cutAcuteHeadJoints (iterations, brickInfo, a, b, d, nAB, normyAB, layFu
     const p1p = [p1[0] + normyAB[0], p1[1] + normyAB[1]]
 
     const res = intersect([...b, ...d], [...p1p, ...p1], false)
-    if (res !== false) {
-      if (j === iterations - 1) {
+    if (res !== false) { // was there an intersection at all?
+      if (j === iterations - 1) { // are we on the last cut before the tip?
         miterLength = len(d, res)
       }
-      result.push(layFunc(p1, p2, zeroedCuboid(brickInfo.brickHeight, len(p1, res), brickInfo.mortarThickness)))
+      if (eep) {
+        result.push(layFunc(p1, p2, zeroedCuboid(brickInfo.brickHeight, len(p1, res), brickInfo.mortarThickness)))
+      } else {
+        result.push(layFunc(p1, p2, zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, len(p1, res))))
+      }
     }
   }
 
@@ -178,16 +204,31 @@ function cutAcuteJoints (a, b, c, d, brickInfo, winding, result) {
   // cut mortar joints, finding the depth by intersecting with the diagonal along the way
   let miterLength = 0
 
-  const deltaAB = [b[0] - a[0], b[1] - a[1]]
-  const tmpAB = cutAcuteHeadJoints(iterations, brickInfo, a, b, d, normalize(deltaAB), normal(deltaAB, brickInfo.brickWidth), layOnLine, result)
-  if (tmpAB > miterLength) {
-    miterLength = tmpAB
-  }
+  // TODO: simplify?
+  if (edgeLenA > edgeLenB) {
+    const deltaAB = [b[0] - a[0], b[1] - a[1]]
+    const tmpAB = cutAcuteHeadJoints(iterations, brickInfo, a, b, d, normalize(deltaAB), normal(deltaAB, brickInfo.brickWidth), layOnLine, true, result)
+    if (tmpAB > miterLength) {
+      miterLength = tmpAB
+    }
 
-  const deltaCB = [b[0] - c[0], b[1] - c[1]]
-  const tmpCB = cutAcuteHeadJoints(iterations, brickInfo, c, b, d, normalize(deltaCB), normal(deltaCB, brickInfo.brickWidth), layOnLineLeft, result)
-  if (tmpCB > miterLength) {
-    miterLength = tmpCB
+    const deltaCB = [b[0] - c[0], b[1] - c[1]]
+    const tmpCB = cutAcuteHeadJoints(iterations, brickInfo, c, b, d, normalize(deltaCB), normal(deltaCB, brickInfo.brickWidth), layOnLine2, true, result)
+    if (tmpCB > miterLength) {
+      miterLength = tmpCB
+    }
+  } else {
+    const deltaAB = [b[0] - a[0], b[1] - a[1]]
+    const tmpAB = cutAcuteHeadJoints(iterations, brickInfo, a, b, d, normalize(deltaAB), normal(deltaAB, brickInfo.brickWidth), layOnLine2Ex, false, result)
+    if (tmpAB > miterLength) {
+      miterLength = tmpAB
+    }
+
+    const deltaCB = [b[0] - c[0], b[1] - c[1]]
+    const tmpCB = cutAcuteHeadJoints(iterations, brickInfo, c, b, d, normalize(deltaCB), normal(deltaCB, brickInfo.brickWidth), layOnLineEx, false, result)
+    if (tmpCB > miterLength) {
+      miterLength = tmpCB
+    }
   }
 
   if (miterLength === 0) { return }
@@ -195,7 +236,7 @@ function cutAcuteJoints (a, b, c, d, brickInfo, winding, result) {
   if (edgeLenA > edgeLenB) {
     result.push(layOnLine(d, b, zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, miterLength)))
   } else {
-    result.push(layOnLine(d, b, zeroedCuboid(brickInfo.brickHeight, brickInfo.mortarThickness, miterLength + brickInfo.mortarThickness)))
+    result.push(layOnLineEx(d, b, zeroedCuboid(brickInfo.brickHeight, miterLength, brickInfo.mortarThickness)))
   }
 }
 
